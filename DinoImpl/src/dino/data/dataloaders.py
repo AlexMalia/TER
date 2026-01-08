@@ -1,0 +1,133 @@
+"""DataLoader creation utilities."""
+
+from torch.utils.data import DataLoader, Dataset
+from typing import Optional, Tuple
+import logging
+
+from .datasets import get_dataset, create_train_val_test_splits
+from .transforms import DINOTransform
+
+logger = logging.getLogger(__name__)
+
+
+def collate_multi_crop(batch):
+    """
+    Custom collate function for multi-crop batches.
+
+    Converts list of (views_list, label) tuples into proper batch format.
+
+    Args:
+        batch: List of (views_list, label) tuples
+
+    Returns:
+        Tuple of (views_batch, labels_batch) where:
+            - views_batch is a list of tensors, one per view type
+            - labels_batch is a tensor of labels
+    """
+    import torch
+
+    # batch is a list of (views_list, label)
+    # views_list contains [global1, global2, local1, ..., local6]
+
+    views_lists = [item[0] for item in batch]
+    labels = torch.tensor([item[1] for item in batch])
+
+    # Transpose: from list of lists to list of batches
+    # [[g1_img1, g2_img1, l1_img1, ...], [g1_img2, g2_img2, l2_img2, ...]]
+    # -> [[g1_img1, g1_img2, ...], [g2_img1, g2_img2, ...], ...]
+    num_views = len(views_lists[0])
+    views_batch = []
+
+    for view_idx in range(num_views):
+        view_batch = torch.stack([views[view_idx] for views in views_lists])
+        views_batch.append(view_batch)
+
+    return views_batch, labels
+
+
+def create_dataloaders(
+    config,
+    return_test: bool = False
+) -> Tuple[DataLoader, Optional[DataLoader], Optional[DataLoader]]:
+    """
+    Create train, validation, and optionally test dataloaders from config.
+
+    Args:
+        config: DinoConfig instance
+        return_test: Whether to return test dataloader
+
+    Returns:
+        Tuple of (train_loader, val_loader, test_loader)
+        If return_test is False, test_loader will be None
+
+    Example:
+        >>> from dino.config.config import DinoConfig
+        >>> config = DinoConfig.from_yaml('configs/default.yaml')
+        >>> train_loader, val_loader, _ = create_dataloaders(config)
+        >>> for views, labels in train_loader:
+        ...     print(len(views))  # 8 (2 global + 6 local)
+        ...     break
+    """
+    # Create transform
+    transform = DINOTransform.from_config(config.augmentation)
+
+    # Load dataset with transform
+    dataset = get_dataset(
+        dataset_name=config.data.dataset,
+        data_path=config.data.data_path,
+        transform=transform,
+        download=True,
+        train=True
+    )
+
+    logger.info(f"Loaded {config.data.dataset} dataset with {len(dataset)} samples")
+
+    # Split into train/val/test
+    train_dataset, val_dataset, test_dataset = create_train_val_test_splits(
+        dataset,
+        train_split=config.data.train_split,
+        val_split=config.data.val_split,
+        seed=config.data.seed
+    )
+
+    # Create dataloaders
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=config.data.batch_size,
+        shuffle=True,
+        num_workers=config.data.num_workers,
+        pin_memory=config.data.pin_memory,
+        collate_fn=collate_multi_crop,
+        drop_last=True  # Drop last incomplete batch for stability
+    )
+
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=config.data.batch_size,
+        shuffle=False,
+        num_workers=config.data.num_workers,
+        pin_memory=config.data.pin_memory,
+        collate_fn=collate_multi_crop,
+        drop_last=False
+    ) if len(val_dataset) > 0 else None
+
+    test_loader = None
+    if return_test and len(test_dataset) > 0:
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=config.data.batch_size,
+            shuffle=False,
+            num_workers=config.data.num_workers,
+            pin_memory=config.data.pin_memory,
+            collate_fn=collate_multi_crop,
+            drop_last=False
+        )
+
+    logger.info(
+        f"Created dataloaders: "
+        f"train={len(train_loader)} batches, "
+        f"val={len(val_loader) if val_loader else 0} batches, "
+        f"test={len(test_loader) if test_loader else 0} batches"
+    )
+
+    return train_loader, val_loader, test_loader
