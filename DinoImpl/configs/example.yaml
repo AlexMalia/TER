@@ -1,0 +1,424 @@
+# =============================================================================
+# DINO Configuration File - Complete Example with Documentation
+# =============================================================================
+# This file documents all available configuration parameters for DINO training.
+# You can copy sections you need and override defaults in your own config files.
+# =============================================================================
+
+# =============================================================================
+# DATA CONFIGURATION
+# =============================================================================
+# Controls dataset loading, batching, and splitting
+data:
+  # Dataset name to use for training
+  # Options: 'imagenette', 'cifar100', or custom dataset name
+  # Type: str
+  dataset: imagenette
+
+  # Path where datasets will be downloaded/stored
+  # Type: str
+  data_path: ./data
+
+  # Number of samples per batch
+  # Larger batches improve training stability but require more GPU memory
+  # Type: int
+  # Recommended: 32-128 depending on GPU memory
+  batch_size: 32
+
+  # Number of parallel workers for data loading
+  # Set to number of CPU cores for best performance
+  # Type: int
+  # Recommended: 4-8 for most systems
+  num_workers: 4
+
+  # Pin memory for faster GPU transfer
+  # Set to true if using CUDA, false for CPU training
+  # Type: bool
+  pin_memory: true
+
+  # Proportion of data to use for training (0.0-1.0)
+  # Type: float
+  train_split: 0.7
+
+  # Proportion of data to use for validation (0.0-1.0)
+  # Remaining data (1.0 - train_split - val_split) used for testing
+  # Type: float
+  val_split: 0.15
+
+  # Random seed for data splitting reproducibility
+  # Type: int
+  seed: 42
+
+
+# =============================================================================
+# AUGMENTATION CONFIGURATION
+# =============================================================================
+# Multi-crop augmentation strategy (core of DINO's success)
+augmentation:
+  # Number of small/local crops per image (in addition to 2 global crops)
+  # Total views = 2 global + num_local_views local
+  # Type: int
+  # Recommended: 6-8
+  num_local_views: 6
+
+  # Size of global crops (large views)
+  # Type: int (pixels)
+  # Recommended: 224 for ResNet, 384 for ViT
+  global_crop_size: 224
+
+  # Size of local crops (small views)
+  # Type: int (pixels)
+  # Recommended: 96 (typically 40-50% of global_crop_size)
+  local_crop_size: 96
+
+  # Minimum scale for global crops (area ratio to original image)
+  # Type: float (0.0-1.0)
+  # Recommended: 0.4-0.5
+  global_crop_scale_min: 0.4
+
+  # Maximum scale for global crops
+  # Type: float (0.0-1.0)
+  global_crop_scale_max: 1.0
+
+  # Minimum scale for local crops
+  # Type: float (0.0-1.0)
+  # Recommended: 0.05 (very small crops for diverse views)
+  local_crop_scale_min: 0.05
+
+  # Maximum scale for local crops
+  # Type: float (0.0-1.0)
+  # Recommended: 0.4 (smaller than global crops)
+  local_crop_scale_max: 0.4
+
+  # --- Color Jitter Augmentation ---
+  # Probability of applying color jitter
+  # Type: float (0.0-1.0)
+  color_jitter_prob: 0.8
+
+  # Brightness jitter strength
+  # Type: float (0.0-1.0)
+  color_jitter_brightness: 0.4
+
+  # Contrast jitter strength
+  # Type: float (0.0-1.0)
+  color_jitter_contrast: 0.4
+
+  # Saturation jitter strength
+  # Type: float (0.0-1.0)
+  color_jitter_saturation: 0.2
+
+  # Hue jitter strength
+  # Type: float (0.0-1.0)
+  color_jitter_hue: 0.1
+
+  # --- Other Augmentations ---
+  # Probability of horizontal flip
+  # Type: float (0.0-1.0)
+  horizontal_flip_prob: 0.5
+
+  # Probability of converting to grayscale
+  # Type: float (0.0-1.0)
+  grayscale_prob: 0.2
+
+  # Minimum sigma for Gaussian blur
+  # Type: float
+  gaussian_blur_sigma_min: 0.1
+
+  # Maximum sigma for Gaussian blur
+  # Type: float
+  gaussian_blur_sigma_max: 2.0
+
+  # Probability of applying solarization (invert pixels above threshold)
+  # Type: float (0.0-1.0)
+  solarization_prob: 0.2
+
+  # Threshold for solarization (0-255)
+  # Type: int
+  solarization_threshold: 128
+
+  # --- Normalization ---
+  # Mean values for RGB channels (ImageNet stats)
+  # Type: tuple[float, float, float]
+  normalize_mean: [0.485, 0.456, 0.406]
+
+  # Std deviation for RGB channels (ImageNet stats)
+  # Type: tuple[float, float, float]
+  normalize_std: [0.229, 0.224, 0.225]
+
+
+# =============================================================================
+# MODEL CONFIGURATION
+# =============================================================================
+# Neural network architecture settings
+model:
+  # Backbone architecture name
+  # Options: resnet18, resnet34, resnet50, resnet101, resnet152
+  # Type: str
+  # Recommended: resnet18 for quick experiments, resnet50 for best results
+  backbone: resnet18
+
+  # Use ImageNet pretrained weights for backbone initialization
+  # Type: bool
+  # Note: True may reduce training time but defeats self-supervised purpose
+  backbone_pretrained: false
+
+  # Hidden dimension in projection head's first layer
+  # Type: int
+  # Recommended: 1024-2048
+  projection_hidden_dim: 1024
+
+  # Bottleneck dimension in projection head's middle layer
+  # Type: int
+  # Recommended: 256
+  projection_bottleneck_dim: 256
+
+  # Output dimension of projection head (embedding space)
+  # Type: int
+  # Recommended: 2048 (higher = more expressive but slower)
+  projection_output_dim: 2048
+
+  # Apply weight normalization to projection head's final layer
+  # Type: bool
+  # Recommended: true (prevents collapse)
+  use_weight_norm: true
+
+
+# =============================================================================
+# LOSS CONFIGURATION
+# =============================================================================
+# DINO loss function parameters
+loss:
+  # Temperature for student softmax (sharpening)
+  # Lower = sharper distributions
+  # Type: float
+  # Recommended: 0.1
+  student_temp: 0.1
+
+  # Temperature for teacher softmax (smoothing)
+  # Higher = smoother distributions
+  # Type: float
+  # Recommended: 0.04-0.07
+  teacher_temp: 0.04
+
+  # EMA momentum for updating loss center (prevent collapse)
+  # Type: float (0.0-1.0)
+  # Recommended: 0.9
+  center_momentum: 0.9
+
+
+# =============================================================================
+# OPTIMIZER CONFIGURATION
+# =============================================================================
+# Gradient descent optimizer settings
+optimizer:
+  # Optimizer type
+  # Options: 'adamw', 'adam', 'sgd'
+  # Type: str
+  # Recommended: adamw
+  optimizer: adamw
+
+  # Learning rate (most important hyperparameter)
+  # Type: float
+  # Recommended: 0.0001-0.001 for AdamW, 0.03-0.1 for SGD
+  lr: 0.001
+
+  # Weight decay (L2 regularization)
+  # Type: float
+  # Recommended: 0.04-0.1 for AdamW
+  weight_decay: 0.04
+
+  # Adam/AdamW beta parameters (momentum coefficients)
+  # Type: tuple[float, float]
+  # Default: [0.9, 0.999]
+  betas: [0.9, 0.999]
+
+  # Epsilon for numerical stability in Adam/AdamW
+  # Type: float
+  eps: 1.0e-8
+
+
+# =============================================================================
+# SCHEDULER CONFIGURATION
+# =============================================================================
+# Learning rate scheduling during training
+scheduler:
+  # Scheduler type
+  # Options: 'cosine_warmup', 'cosine', 'step', 'none'
+  # Type: str
+  # Recommended: cosine_warmup
+  scheduler: cosine_warmup
+
+  # Number of warmup epochs (linear lr increase)
+  # Type: int
+  # Recommended: 5-10
+  warmup_epochs: 10
+
+  # Minimum learning rate at end of cosine schedule
+  # Type: float
+  # Recommended: 1e-6 to 1e-5
+  min_lr: 1.0e-6
+
+  # Starting learning rate for warmup phase
+  # Type: float
+  # Recommended: 0.0 (start from zero)
+  warmup_start_lr: 0.0
+
+
+# =============================================================================
+# TRAINING CONFIGURATION
+# =============================================================================
+# Training loop and process settings
+training:
+  # Total number of training epochs
+  # Type: int
+  # Recommended: 100-300 for small datasets, 800+ for ImageNet
+  num_epochs: 100
+
+  # Base EMA momentum for teacher updates
+  # Higher = slower teacher updates
+  # Type: float (0.0-1.0)
+  # Recommended: 0.996-0.998
+  teacher_momentum: 0.996
+
+  # Use cosine schedule for teacher momentum (increases over training)
+  # Type: bool
+  # Recommended: true
+  teacher_momentum_schedule: true
+
+  # Final teacher momentum value if using schedule
+  # Type: float (0.0-1.0)
+  # Recommended: 1.0 (asymptotically approaches 1.0)
+  teacher_momentum_final: 1.0
+
+  # Maximum gradient norm for clipping (prevents exploding gradients)
+  # Set to null to disable
+  # Type: float or null
+  # Recommended: 3.0
+  gradient_clip: 3.0
+
+  # Use automatic mixed precision (FP16) for faster training
+  # Requires GPU with Tensor Cores (V100, A100, RTX 20xx+)
+  # Type: bool
+  # Recommended: false (can cause instability)
+  mixed_precision: false
+
+  # Random seed for training reproducibility
+  # Type: int
+  seed: 42
+
+  # Device to use for training
+  # Options: 'cuda', 'cpu', 'cuda:0', 'cuda:1', etc.
+  # Type: str
+  device: cuda
+
+
+# =============================================================================
+# CHECKPOINT CONFIGURATION
+# =============================================================================
+# Model saving and resumption settings
+checkpoint:
+  # Directory where checkpoints will be saved
+  # Type: str
+  checkpoint_dir: ./checkpoints
+
+  # Save checkpoint every N epochs
+  # Type: int
+  # Recommended: 1-10 depending on dataset size
+  save_every_n_epochs: 1
+
+  # Save checkpoint every N iterations (overrides epoch-based saving if set)
+  # Set to null to use epoch-based saving only
+  # Type: int or null
+  save_every_n_iters: null
+
+  # Keep only the last N checkpoints (delete older ones)
+  # Set to -1 to keep all checkpoints
+  # Type: int
+  # Recommended: 3-5 (saves disk space)
+  keep_last_n: 5
+
+  # Save best checkpoint based on validation loss
+  # Type: bool
+  save_best: true
+
+  # Path to checkpoint to resume training from
+  # Set to null to start fresh training
+  # Type: str or null
+  # Example: './checkpoints/checkpoint_epoch_0050.pth'
+  resume_from: null
+
+
+# =============================================================================
+# LOGGING CONFIGURATION
+# =============================================================================
+# Training monitoring and logging settings
+logging:
+  # Directory where logs will be saved
+  # Type: str
+  log_dir: ./logs
+
+  # Log training metrics every N iterations
+  # Type: int
+  # Recommended: 10-50
+  log_every_n_iters: 10
+
+  # Enable TensorBoard logging
+  # Type: bool
+  # Recommended: true (view with: tensorboard --logdir logs/)
+  use_tensorboard: true
+
+  # Enable Weights & Biases logging
+  # Requires: pip install wandb
+  # Type: bool
+  use_wandb: false
+
+  # W&B project name (only if use_wandb=true)
+  # Type: str or null
+  wandb_project: null
+
+  # W&B entity/username (only if use_wandb=true)
+  # Type: str or null
+  wandb_entity: null
+
+  # W&B run name (only if use_wandb=true)
+  # Set to null for auto-generated name
+  # Type: str or null
+  wandb_run_name: null
+
+
+# =============================================================================
+# USAGE EXAMPLES
+# =============================================================================
+# Example 1: Quick experiment on CIFAR-100
+# data:
+#   dataset: cifar100
+#   batch_size: 64
+# training:
+#   num_epochs: 50
+
+# Example 2: High-quality ImageNette training
+# model:
+#   backbone: resnet50
+#   projection_output_dim: 4096
+# training:
+#   num_epochs: 300
+#   teacher_momentum: 0.998
+
+# Example 3: Resume from checkpoint
+# checkpoint:
+#   resume_from: './checkpoints/checkpoint_epoch_0100.pth'
+
+# Example 4: Enable W&B logging
+# logging:
+#   use_wandb: true
+#   wandb_project: 'dino-experiments'
+#   wandb_entity: 'your-username'
+
+# =============================================================================
+# NOTES
+# =============================================================================
+# - You don't need to specify all parameters - omitted ones use defaults
+# - CLI arguments override config file values (e.g., --batch-size 64)
+# - See ARCHITECTURE.md for detailed explanations of each component
+# - For best results on ImageNet-scale data: use resnet50, 800+ epochs,
+#   batch size 256+, and teacher_momentum=0.998
