@@ -108,7 +108,7 @@ class DinoLoss(nn.Module):
         total_loss = 0.0
         n_loss_terms = 0
 
-        # FIXED: Use the chunked probability distributions, not raw outputs
+        # Use the chunked probability distributions, not raw outputs
         for i, teacher_prob in enumerate(teacher_probs_chunked):
             for j, student_log_prob in enumerate(student_log_probs_chunked):
                 # Skip when comparing same views

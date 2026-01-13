@@ -91,7 +91,10 @@ class DINOTransform:
         self.global_t2 = transforms.Compose([
             transforms.RandomResizedCrop(global_crop_size, scale=global_crop_scale),
             flip_and_color_jitter,
-            transforms.GaussianBlur(kernel_size=23, sigma=gaussian_blur_sigma),
+            transforms.RandomApply(
+                [transforms.GaussianBlur(kernel_size=23, sigma=gaussian_blur_sigma)],
+                p=0.1
+            ),
             transforms.RandomSolarize(threshold=solarization_threshold, p=solarization_prob),
             normalize,
         ])
@@ -100,7 +103,10 @@ class DINOTransform:
         self.local_transform = transforms.Compose([
             transforms.RandomResizedCrop(local_crop_size, scale=local_crop_scale),
             flip_and_color_jitter,
-            transforms.GaussianBlur(kernel_size=23, sigma=gaussian_blur_sigma),
+            transforms.RandomApply(
+                [transforms.GaussianBlur(kernel_size=23, sigma=gaussian_blur_sigma)],
+                p=0.5
+            ),
             normalize,
         ])
 

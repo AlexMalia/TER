@@ -15,7 +15,7 @@ def update_teacher_EMA(
     """
     Update teacher network with Exponential Moving Average of student weights.
 
-    θ_teacher = α * θ_teacher + (1 - α) * θ_student
+    θ_teacher = alpha * θ_teacher + (1 - alpha) * θ_student
 
     Args:
         student: Student model

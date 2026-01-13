@@ -1,24 +1,8 @@
-"""Backbone architectures for DINO."""
 
+from .backbone import BackboneBase
+from torchvision import models
 import torch
 import torch.nn as nn
-from torchvision import models
-from typing import Optional
-
-
-class BackboneBase(nn.Module):
-    """Base class for backbone architectures."""
-
-    def __init__(self):
-        super().__init__()
-        self.output_dim = None
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
-
-    def get_output_dim(self) -> int:
-        """Get the output dimension of the backbone."""
-        return self.output_dim
 
 
 class ResnetBackboneDino(BackboneBase):
@@ -72,28 +56,3 @@ class ResnetBackboneDino(BackboneBase):
 
     def __repr__(self) -> str:
         return f"ResnetBackboneDino(variant={self.variant}, output_dim={self.output_dim})"
-
-
-def get_backbone(name: str, pretrained: bool = False, **kwargs) -> BackboneBase:
-    """
-    Factory function to get backbone by name.
-
-    Args:
-        name: Backbone name ('resnet18', 'resnet34', 'resnet50', etc.)
-        pretrained: Whether to use pre-trained weights
-        **kwargs: Additional arguments for the backbone
-
-    Returns:
-        Backbone instance
-
-    Example:
-        >>> backbone = get_backbone('resnet18', pretrained=False)
-        >>> print(backbone.output_dim)
-        512
-    """
-    name_lower = name.lower()
-
-    if name_lower in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']:
-        return ResnetBackboneDino(variant=name_lower, pretrained=pretrained)
-    else:
-        raise ValueError(f"Unknown backbone: {name}")

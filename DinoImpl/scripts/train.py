@@ -29,7 +29,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from dino.config.config import DinoConfig
 from dino.data.dataloaders import create_dataloaders
-from dino.models import get_backbone, get_projection_head, DinoModel
+from dino.models.backbone import get_backbone
+from dino.models import get_projection_head, DinoModel
 from dino.loss import DinoLoss
 from dino.training import DinoTrainer
 from dino.utils import setup_logging, find_latest_checkpoint
