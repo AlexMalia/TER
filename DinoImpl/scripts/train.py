@@ -122,6 +122,8 @@ def main():
     setup_logging(config.logging.log_dir, config.logging.log_verbosity)
     logger = logging.getLogger(__name__)
     torch.set_printoptions(profile="full", linewidth=200)
+    logger.info("Starting DINO training script")
+    logger.info(f"Current device: {torch.cuda.get_device_name() if torch.cuda.is_available() else 'CPU'}")
     
     # Determine device
     device = args.device if torch.cuda.is_available() else "cpu"
@@ -209,12 +211,35 @@ def main():
     else:
         raise ValueError(f"Unknown optimizer: {config.optimizer.optimizer}")
 
+    # Create learning rate scheduler with warmup + cosine decay
+    total_steps = config.training.num_epochs * len(train_loader)
+    warmup_steps = config.scheduler.warmup_epochs * len(train_loader)
+
+    warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+        optimizer,
+        start_factor=1e-8 / config.optimizer.lr,
+        end_factor=1.0,
+        total_iters=warmup_steps
+    )
+    cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=total_steps - warmup_steps,
+        eta_min=config.scheduler.min_lr
+    )
+    scheduler = torch.optim.lr_scheduler.SequentialLR(
+        optimizer,
+        schedulers=[warmup_scheduler, cosine_scheduler],
+        milestones=[warmup_steps]
+    )
+    logger.info(f"Created scheduler with {warmup_steps} warmup steps, {total_steps} total steps")
+
     # Create trainer
     trainer = DinoTrainer(
         config=config,
         student=student,
         teacher=teacher,
         optimizer=optimizer,
+        scheduler=scheduler,
         loss_fn=dino_loss,
         train_loader=train_loader,
         val_loader=val_loader,

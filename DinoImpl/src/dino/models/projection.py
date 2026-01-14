@@ -59,24 +59,16 @@ class CovNetProjectionHeadDino(nn.Module):
             self.last_layer = last_layer
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass through projection head.
-
-        Args:
-            x: Input tensor of shape [batch_size, input_dim]
-
-        Returns:
-            Projected tensor of shape [batch_size, output_dim]
-        """
+        """Forward pass through projection head."""
         # Pass through MLP
         x = self.mlp(x)
-
-        # L2 normalize after bottleneck
+        
+        # L2 normalize after bottleneck (as per DINO paper)
         x = F.normalize(x, dim=-1, p=2)
-
-        # Final projection
+        
+        # Final projection (weight-normalized layer)
         x = self.last_layer(x)
-
+        
         return x
 
     def __repr__(self) -> str:

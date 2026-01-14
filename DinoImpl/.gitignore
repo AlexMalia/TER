@@ -14,3 +14,5 @@ dataset/
 
 # Checkpoints
 checkpoints/
+
+logs/

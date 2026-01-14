@@ -3,8 +3,11 @@
 import torch
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 import logging
+
+if TYPE_CHECKING:
+    from .history import History
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +23,8 @@ def save_checkpoint(
     metrics: Optional[Dict[str, float]] = None,
     checkpoint_dir: str = './checkpoints',
     filename: Optional[str] = None,
-    is_best: bool = False
+    is_best: bool = False,
+    history: Optional['History'] = None
 ) -> Path:
     """
     Save a complete checkpoint of the DINO training state.
@@ -37,6 +41,7 @@ def save_checkpoint(
         checkpoint_dir: Directory to save checkpoints
         filename: Optional custom filename
         is_best: Whether this is the best checkpoint
+        history: Optional History instance to save alongside checkpoint
 
     Returns:
         Path to saved checkpoint
@@ -61,6 +66,7 @@ def save_checkpoint(
         'config': config.to_dict() if hasattr(config, 'to_dict') else config,
         'metrics': metrics or {},
         'timestamp': datetime.now().isoformat(),
+        'has_history': history is not None,
     }
 
     # Save checkpoint
@@ -70,6 +76,16 @@ def save_checkpoint(
     # Also save a "latest" checkpoint
     latest_path = checkpoint_dir / 'checkpoint_latest.pth'
     torch.save(checkpoint, latest_path)
+
+    # Save history to separate JSON file
+    if history is not None:
+        history_filename = checkpoint_path.stem + '_history.json'
+        history_path = checkpoint_dir / history_filename
+        history.save(history_path)
+
+        # Also save latest history
+        latest_history_path = checkpoint_dir / 'history_latest.json'
+        history.save(latest_history_path)
 
     # Save best checkpoint if specified
     if is_best:
@@ -115,8 +131,8 @@ def load_checkpoint(
     teacher.load_state_dict(checkpoint['teacher_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
-    # Restore loss center
-    dino_loss.center = checkpoint['dino_loss_center']
+    # Restore loss center (ensure it's on the correct device)
+    dino_loss.center = checkpoint['dino_loss_center'].to(device)
 
     # Get training info
     epoch = checkpoint['epoch']
@@ -128,12 +144,27 @@ def load_checkpoint(
         f"Epoch: {epoch}, Iteration: {iteration}"
     )
 
+    # Try to load history from associated JSON file
+    history = None
+    if checkpoint.get('has_history', False):
+        from .history import History
+        history_filename = checkpoint_path.stem + '_history.json'
+        history_path = checkpoint_path.parent / history_filename
+        if history_path.exists():
+            history = History.load(history_path)
+        else:
+            # Try loading latest history as fallback
+            latest_history_path = checkpoint_path.parent / 'history_latest.json'
+            if latest_history_path.exists():
+                history = History.load(latest_history_path)
+
     return {
         'epoch': epoch,
         'iteration': iteration,
         'metrics': metrics,
         'config': checkpoint.get('config'),
-        'timestamp': checkpoint.get('timestamp')
+        'timestamp': checkpoint.get('timestamp'),
+        'history': history
     }
 
 

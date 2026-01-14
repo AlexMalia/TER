@@ -3,13 +3,14 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from typing import Optional, Dict
+from typing import Optional, Dict, Union
 import logging
 from tqdm import tqdm
 
 from ..utils.ema import update_teacher_EMA, get_momentum_schedule
 from ..utils.checkpoint import save_checkpoint, load_checkpoint
 from ..utils.logging_utils import log_metrics
+from ..utils.history import History
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,7 @@ class DinoTrainer:
         student: nn.Module,
         teacher: nn.Module,
         optimizer: torch.optim.Optimizer,
+        scheduler: Optional[torch.optim.lr_scheduler.LRScheduler],
         loss_fn: nn.Module,
         train_loader: DataLoader,
         val_loader: Optional[DataLoader] = None,
@@ -70,6 +72,7 @@ class DinoTrainer:
         self.student = student
         self.teacher = teacher
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.loss_fn = loss_fn
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -78,7 +81,10 @@ class DinoTrainer:
         # Training state
         self.current_epoch = 0
         self.current_iteration = 0
-        self.history = []
+        self.history = History(metadata={
+            'config': config.to_dict() if hasattr(config, 'to_dict') else str(config),
+            'device': device,
+        })
 
         # EMA momentum schedule
         if config.training.teacher_momentum_schedule:
@@ -154,6 +160,10 @@ class DinoTrainer:
             # Optimizer step - train student
             self.optimizer.step()
 
+            # Learning rate scheduler step
+            if self.scheduler is not None:
+                self.scheduler.step()
+
             # EMA update for teacher
             if self.momentum_schedule is not None:
                 momentum = self.momentum_schedule[self.current_iteration]
@@ -164,7 +174,15 @@ class DinoTrainer:
 
             # Update statistics
             epoch_loss += loss.item()
-            self.history.append(loss.item())
+            current_lr = self.optimizer.param_groups[0]['lr']
+            self.history.record_iteration(
+                iteration=self.current_iteration,
+                metrics={
+                    'loss': loss.item(),
+                    'learning_rate': current_lr,
+                    'momentum': momentum
+                }
+            )
             self.current_iteration += 1
 
             # Update progress bar
@@ -178,16 +196,32 @@ class DinoTrainer:
                     f"Momentum: {momentum:.4f}"
                 )
                 logger.debug(f"Loss infos: {self.loss_fn}")
-                logger.debug(f"Updated center: {self.loss_fn.get_center()}")
+                
+                c = self.loss_fn.get_center()
+
+                # 1. Format the first 5 elements for a quick preview
+                preview = ", ".join([f"{x:.4f}" for x in c.flatten()[:10].tolist()])
+
+                # 2. Log everything in one structured message
+                logger.debug(
+                    f"Center {list(c.shape)} | "
+                    f"Norm: {c.norm():.4f} | "
+                    f"μ: {c.mean():.4f} ± {c.std():.4f} | "
+                    f"Range: [{c.min():.4f}, {c.max():.4f}] | "
+                    f"Data: [{preview}, ...]"
+                )
+
                 logger.debug(f"Gradient norms:")
                 for name, param in self.student.named_parameters():
-                    if param.grad is not None:
+                    # Check if the param is learnable (requires_grad) AND has a gradient calculated
+                    if param.requires_grad and param.grad is not None:
                         grad_norm = param.grad.data.norm(2).item()
                         logger.debug(f"  {name}: {grad_norm:.4f}")
         # Compute epoch metrics
         avg_loss = epoch_loss / num_batches
         metrics = {
             'loss': avg_loss,
+            'learning_rate': self.optimizer.param_groups[0]['lr'],
             'momentum': momentum if self.momentum_schedule else self.config.training.teacher_momentum
         }
 
@@ -210,6 +244,9 @@ class DinoTrainer:
             # Train for one epoch
             metrics = self.train_epoch(epoch)
 
+            # Record epoch metrics
+            self.history.record_epoch(epoch, metrics)
+
             # Log metrics
             log_metrics(metrics, epoch, prefix="Train")
 
@@ -224,7 +261,8 @@ class DinoTrainer:
                     iteration=self.current_iteration,
                     config=self.config,
                     metrics=metrics,
-                    checkpoint_dir=self.config.checkpoint.checkpoint_dir
+                    checkpoint_dir=self.config.checkpoint.checkpoint_dir,
+                    history=self.history
                 )
 
             self.current_epoch = epoch
@@ -250,5 +288,9 @@ class DinoTrainer:
 
         self.current_epoch = checkpoint_info['epoch']
         self.current_iteration = checkpoint_info['iteration']
+
+        # Restore history if available
+        if checkpoint_info.get('history') is not None:
+            self.history = checkpoint_info['history']
 
         logger.info(f"Resumed from epoch {self.current_epoch}, iteration {self.current_iteration}")
