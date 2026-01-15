@@ -3,8 +3,6 @@
 import torch
 import torch.nn as nn
 
-from .resnet import ResnetBackboneDino
-from.vit import DinoBackboneDino
 
 class BackboneBase(nn.Module):
     """Base class for backbone architectures."""
@@ -34,16 +32,20 @@ def get_backbone(name: str, pretrained: bool = False, **kwargs) -> BackboneBase:
     Returns:
         Backbone instance
     """
+    # Import here to avoid circular imports
+    from .resnet import ResnetBackboneDino
+    from .vit import DinoBackbone
+
     name_lower = name.lower()
 
     # ResNet variants
     if name_lower in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']:
         return ResnetBackboneDino(variant=name_lower, pretrained=pretrained)
-    
+
     # DINO v1
     elif name_lower in ['dino_vits8', 'dino_vits16', 'dino_vitb8', 'dino_vitb16']:
         return DinoBackbone(variant=name_lower, pretrained=pretrained)
-    
+
     else:
         raise ValueError(
             f"Unknown backbone: {name}. "

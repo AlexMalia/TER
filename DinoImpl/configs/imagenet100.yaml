@@ -1,17 +1,21 @@
+# Configuration for ImageNet100 dataset
+# Dataset from Kaggle: https://www.kaggle.com/datasets/ambityga/imagenet100
+# 100 classes, 130k train images, 5k val images
+
 data:
-  dataset: cifar100
-  data_path: ./data
-  batch_size: 32
+  dataset: imagenet100
+  data_path: ./dataset/imagenet100
+  batch_size: 128
   num_workers: 4
   pin_memory: true
-  train_split: 0.7
+  train_split: 0.85
   val_split: 0.15
   seed: 42
 
 augmentation:
   num_local_views: 6
-  global_crop_size: 32  # CIFAR-100 images are 32x32
-  local_crop_size: 14
+  global_crop_size: 224
+  local_crop_size: 96
   global_crop_scale_min: 0.4
   global_crop_scale_max: 1.0
   local_crop_scale_min: 0.05
@@ -27,16 +31,16 @@ augmentation:
   gaussian_blur_sigma_max: 2.0
   solarization_prob: 0.2
   solarization_threshold: 128
-  normalize_mean: [0.485, 0.456, 0.406]
+  normalize_mean: [0.485, 0.456, 0.406]  # ImageNet normalization
   normalize_std: [0.229, 0.224, 0.225]
 
 model:
-  backbone: resnet18
+  backbone: resnet34
   backbone_pretrained: false
-  projection_hidden_dim: 1024
+  projection_hidden_dim: 2048
   projection_bottleneck_dim: 256
-  projection_output_dim: 2048
-  use_weight_norm: true
+  projection_output_dim: 4096
+  use_weight_norm: false
 
 loss:
   student_temp: 0.1
@@ -45,16 +49,15 @@ loss:
 
 optimizer:
   optimizer: adamw
-  lr: 0.001
+  lr: 0.0005
   weight_decay: 0.04
   betas: [0.9, 0.999]
   eps: 1.0e-08
 
 scheduler:
-  scheduler: cosine_warmup
+  scheduler: cosine
   warmup_epochs: 10
   min_lr: 1.0e-06
-  warmup_start_lr: 0.0
 
 training:
   num_epochs: 100
@@ -62,23 +65,16 @@ training:
   teacher_momentum_schedule: true
   teacher_momentum_final: 1.0
   gradient_clip: 3.0
-  mixed_precision: false
   seed: 42
   device: cuda
 
 checkpoint:
-  checkpoint_dir: ./checkpoints
-  save_every_n_epochs: 1
-  save_every_n_iters: null
-  keep_last_n: 5
+  checkpoint_dir: ./checkpoints/imagenet100
+  save_every_n_epochs: 10
   save_best: true
   resume_from: null
 
 logging:
-  log_dir: ./logs
-  log_every_n_iters: 10
-  use_tensorboard: true
-  use_wandb: false
-  wandb_project: null
-  wandb_entity: null
-  wandb_run_name: null
+  log_dir: ./logs/imagenet100
+  log_every_n_iters: 50
+  log_verbosity: debug

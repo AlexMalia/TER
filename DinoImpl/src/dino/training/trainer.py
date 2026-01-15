@@ -78,6 +78,9 @@ class DinoTrainer:
         self.val_loader = val_loader
         self.device = device
 
+        # Check if we're in streaming mode (IterableDataset doesn't have __len__)
+        self.is_streaming = not hasattr(train_loader.dataset, '__len__')
+
         # Training state
         self.current_epoch = 0
         self.current_iteration = 0
@@ -86,13 +89,26 @@ class DinoTrainer:
             'device': device,
         })
 
+        # Determine number of iterations per epoch
+        if self.is_streaming:
+            # For streaming, use config value or estimate based on ImageNet100 size
+            streaming_samples = getattr(config.data, 'streaming_train_samples', None)
+            if streaming_samples:
+                self.niter_per_epoch = streaming_samples // config.data.batch_size
+            else:
+                # Default estimate for ImageNet100: ~117k train samples
+                self.niter_per_epoch = 117000 // config.data.batch_size
+            logger.info(f"Streaming mode: estimated {self.niter_per_epoch} iterations per epoch")
+        else:
+            self.niter_per_epoch = len(train_loader)
+
         # EMA momentum schedule
         if config.training.teacher_momentum_schedule:
             self.momentum_schedule = get_momentum_schedule(
                 base_momentum=config.training.teacher_momentum,
                 final_momentum=config.training.teacher_momentum_final,
                 num_epochs=config.training.num_epochs,
-                niter_per_epoch=len(train_loader)
+                niter_per_epoch=self.niter_per_epoch
             )
         else:
             self.momentum_schedule = None
@@ -118,13 +134,14 @@ class DinoTrainer:
         self.teacher.eval()
 
         epoch_loss = 0.0
-        num_batches = len(self.train_loader)
+        num_batches = self.niter_per_epoch if self.is_streaming else len(self.train_loader)
 
-        # Progress bar
+        # Progress bar (with total if known, otherwise streaming mode)
         pbar = tqdm(
             self.train_loader,
             desc=f"Epoch {epoch}/{self.config.training.num_epochs}",
-            leave=True
+            leave=True,
+            total=num_batches if not self.is_streaming else None
         )
 
         for batch_idx, (view_set, _) in enumerate(pbar):
@@ -190,8 +207,9 @@ class DinoTrainer:
 
             # Log periodically
             if (batch_idx + 1) % self.config.logging.log_every_n_iters == 0:
+                progress_str = f"{batch_idx+1}" if self.is_streaming else f"{batch_idx+1}/{num_batches}"
                 logger.info(
-                    f"Epoch {epoch} [{batch_idx+1}/{num_batches}] "
+                    f"Epoch {epoch} [{progress_str}] "
                     f"Loss: {loss.item():.4f}, "
                     f"Momentum: {momentum:.4f}"
                 )
@@ -217,8 +235,10 @@ class DinoTrainer:
                     if param.requires_grad and param.grad is not None:
                         grad_norm = param.grad.data.norm(2).item()
                         logger.debug(f"  {name}: {grad_norm:.4f}")
-        # Compute epoch metrics
-        avg_loss = epoch_loss / num_batches
+
+        # Compute epoch metrics (use actual batch count for streaming)
+        actual_batches = batch_idx + 1
+        avg_loss = epoch_loss / actual_batches
         metrics = {
             'loss': avg_loss,
             'learning_rate': self.optimizer.param_groups[0]['lr'],

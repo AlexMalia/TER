@@ -18,6 +18,12 @@ class DataConfig:
     train_split: float = 0.7
     val_split: float = 0.15
     seed: int = 42
+    # Streaming options (for HuggingFace datasets)
+    streaming: bool = False
+    shuffle_buffer_size: int = 10000
+    # For streaming, specify number of samples per epoch (since len() is unavailable)
+    streaming_train_samples: Optional[int] = None
+    streaming_val_samples: Optional[int] = None
 
 
 @dataclass

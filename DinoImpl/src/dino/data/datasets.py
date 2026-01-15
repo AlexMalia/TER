@@ -1,9 +1,12 @@
 """Dataset wrappers and utilities."""
 
+import os
+import glob
 import torch
-from torch.utils.data import Dataset, random_split
+from torch.utils.data import Dataset, random_split, ConcatDataset
 import torchvision
-from typing import Tuple, Optional, Callable
+from torchvision.datasets import ImageFolder
+from typing import Tuple, Optional, Callable, List
 import logging
 
 logger = logging.getLogger(__name__)
@@ -20,8 +23,8 @@ def get_dataset(
     Get dataset by name.
 
     Supported datasets:
-    - cifar100: CIFAR-100
     - imagenette: ImageNette (subset of ImageNet)
+    - imagenet100: ImageNet100 (100-class subset of ImageNet from Kaggle)
 
     Args:
         dataset_name: Name of the dataset
@@ -39,32 +42,63 @@ def get_dataset(
     Example:
         >>> from dino.data.transforms import DINOTransform
         >>> transform = DINOTransform()
-        >>> dataset = get_dataset('cifar100', './data', transform=transform)
-        >>> print(len(dataset))
-        50000
+        >>> dataset = get_dataset('imagenette', './data', transform=transform)
     """
     dataset_name = dataset_name.lower()
 
-    if dataset_name == 'cifar100':
-        return torchvision.datasets.CIFAR100(
-            root=data_path,
-            train=train,
-            download=download,
-            transform=transform
-        )
     elif dataset_name == 'imagenette':
         # Imagenette uses 'train' or 'val' as split argument
         split = 'train' if train else 'val'
-        return torchvision.datasets.Imagenette(
+        imagenette = torchvision.datasets.Imagenette(
             root=data_path,
             split=split,
             download=download,
             transform=transform
         )
+        logger.info(f"Loaded Imagenette dataset ({split}) with {len(imagenette)} samples")
+        return imagenette
+    elif dataset_name == 'imagenet100':
+        # ImageNet100 from Kaggle: https://www.kaggle.com/datasets/ambityga/imagenet100
+        # Structure: data_path/train.X1/, train.X2/, train.X3/, train.X4/ and data_path/val.X/
+        if train:
+            # Find all train.X* folders and combine them
+            train_patterns = sorted(glob.glob(os.path.join(data_path, 'train.X*')))
+            if not train_patterns:
+                raise FileNotFoundError(
+                    f"ImageNet100 train folders not found at: {data_path}\n"
+                    f"Expected folders like train.X1, train.X2, etc.\n"
+                    f"Please download the dataset from Kaggle:\n"
+                    f"  kaggle datasets download -d ambityga/imagenet100\n"
+                    f"Then extract it to: {data_path}"
+                )
+
+            logger.info(f"Loading ImageNet100 train splits from: {train_patterns}")
+            datasets: List[Dataset] = [
+                ImageFolder(root=folder, transform=transform)
+                for folder in train_patterns
+            ]
+            concated = ConcatDataset(datasets)
+            logger.info(f"Loaded ImageNet100 train split with {len(concated)} samples")
+            return concated
+        else:
+            # Validation split
+            val_path = os.path.join(data_path, 'val.X')
+            if not os.path.exists(val_path):
+                raise FileNotFoundError(
+                    f"ImageNet100 val folder not found at: {val_path}\n"
+                    f"Please download the dataset from Kaggle:\n"
+                    f"  kaggle datasets download -d ambityga/imagenet100\n"
+                    f"Then extract it to: {data_path}"
+                )
+
+            logger.info(f"Loading ImageNet100 val split from: {val_path}")
+            val_dataset = ImageFolder(root=val_path, transform=transform)
+            logger.info(f"Loaded ImageNet100 val split with {len(val_dataset)} samples")
+            return val_dataset
     else:
         raise ValueError(
             f"Unknown dataset: {dataset_name}. "
-            f"Supported datasets: cifar100, imagenette"
+            f"Supported datasets: imagenette, imagenet100"
         )
 
 
@@ -121,42 +155,136 @@ def create_train_val_test_splits(
     return train_dataset, val_dataset, test_dataset
 
 
-class MultiCropDataset(Dataset):
-    """
-    Wrapper dataset that applies multi-crop transformations.
+# =============================================================================
+# Streaming Dataset Support (HuggingFace)
+# =============================================================================
 
-    This is useful when you want to use a dataset that doesn't natively
-    support multi-crop transformations.
+class HuggingFaceStreamingDataset(torch.utils.data.IterableDataset):
+    """
+    PyTorch IterableDataset wrapper for HuggingFace streaming datasets.
+
+    This allows using HuggingFace datasets with streaming=True in PyTorch
+    DataLoaders without downloading the entire dataset.
 
     Args:
-        base_dataset: Base dataset
-        transform: Multi-crop transform (e.g., DINOTransform)
+        hf_dataset: HuggingFace IterableDataset (from load_dataset with streaming=True)
+        transform: Transform to apply to images (e.g., DINOTransform)
+        image_key: Key for image column in the dataset (default: 'image')
+        label_key: Key for label column in the dataset (default: 'label')
 
     Example:
-        >>> from torchvision.datasets import CIFAR100
+        >>> from datasets import load_dataset
         >>> from dino.data.transforms import DINOTransform
-        >>> base_dataset = CIFAR100(root='./data', train=True, download=True)
+        >>> hf_ds = load_dataset("ilee0022/ImageNet100", split="train", streaming=True)
         >>> transform = DINOTransform()
-        >>> dataset = MultiCropDataset(base_dataset, transform)
-        >>> views, label = dataset[0]
-        >>> len(views)  # 2 global + 6 local
-        8
+        >>> dataset = HuggingFaceStreamingDataset(hf_ds, transform)
+        >>> for views, label in dataset:
+        ...     print(len(views))  # 8
+        ...     break
     """
 
-    def __init__(self, base_dataset: Dataset, transform: Callable):
-        self.base_dataset = base_dataset
+    def __init__(
+        self,
+        hf_dataset,
+        transform: Optional[Callable] = None,
+        image_key: str = 'image',
+        label_key: str = 'label'
+    ):
+        self.hf_dataset = hf_dataset
         self.transform = transform
+        self.image_key = image_key
+        self.label_key = label_key
 
-    def __len__(self) -> int:
-        return len(self.base_dataset)
+    def __iter__(self):
+        for sample in self.hf_dataset:
+            image = sample[self.image_key]
+            label = sample[self.label_key]
 
-    def __getitem__(self, idx: int) -> Tuple:
-        """
-        Get item with multi-crop transformations.
+            # HuggingFace returns PIL images directly
+            if self.transform is not None:
+                image = self.transform(image)
 
-        Returns:
-            Tuple of (views, label) where views is a list of transformed images
-        """
-        img, label = self.base_dataset[idx]
-        views = self.transform(img)
-        return views, label
+            yield image, label
+
+
+def get_streaming_dataset(
+    dataset_name: str,
+    split: str = 'train',
+    transform: Optional[Callable] = None,
+    shuffle: bool = True,
+    shuffle_buffer_size: int = 10000,
+    seed: int = 42
+):
+    """
+    Get a streaming dataset from HuggingFace Hub.
+
+    This allows training on large datasets without downloading them entirely.
+    Data is streamed on-the-fly during training.
+
+    Supported streaming datasets:
+    - imagenet100: ImageNet100 from HuggingFace (ilee0022/ImageNet100)
+
+    Args:
+        dataset_name: Name of the dataset
+        split: Dataset split ('train', 'validation', 'test')
+        transform: Transform to apply to images
+        shuffle: Whether to shuffle the dataset (uses buffer shuffling)
+        shuffle_buffer_size: Size of the shuffle buffer
+        seed: Random seed for shuffling
+
+    Returns:
+        HuggingFaceStreamingDataset instance (PyTorch IterableDataset)
+
+    Example:
+        >>> from dino.data.transforms import DINOTransform
+        >>> transform = DINOTransform()
+        >>> dataset = get_streaming_dataset('imagenet100', 'train', transform)
+        >>> dataloader = DataLoader(dataset, batch_size=32)
+        >>> for views, labels in dataloader:
+        ...     print(len(views))  # 8
+        ...     break
+    """
+    try:
+        from datasets import load_dataset
+    except ImportError:
+        raise ImportError(
+            "HuggingFace datasets library is required for streaming. "
+            "Install it with: pip install datasets"
+        )
+
+    dataset_name = dataset_name.lower()
+
+    # Map dataset names to HuggingFace Hub identifiers
+    hf_dataset_map = {
+        'imagenet100': 'ilee0022/ImageNet100',
+    }
+
+    if dataset_name not in hf_dataset_map:
+        raise ValueError(
+            f"Unknown streaming dataset: {dataset_name}. "
+            f"Supported streaming datasets: {list(hf_dataset_map.keys())}"
+        )
+
+    hf_dataset_id = hf_dataset_map[dataset_name]
+    logger.info(f"Loading streaming dataset: {hf_dataset_id} (split={split})")
+
+    # Load with streaming
+    hf_dataset = load_dataset(
+        hf_dataset_id,
+        split=split,
+        streaming=True,
+        trust_remote_code=True
+    )
+
+    # Apply shuffle if requested (buffer-based shuffling for streaming)
+    if shuffle:
+        hf_dataset = hf_dataset.shuffle(seed=seed, buffer_size=shuffle_buffer_size)
+
+    logger.info(f"Streaming dataset ready: {hf_dataset_id}")
+
+    return HuggingFaceStreamingDataset(
+        hf_dataset=hf_dataset,
+        transform=transform,
+        image_key='image',
+        label_key='label'
+    )
