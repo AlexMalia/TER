@@ -46,7 +46,7 @@ def get_dataset(
     """
     dataset_name = dataset_name.lower()
 
-    elif dataset_name == 'imagenette':
+    if dataset_name == 'imagenette':
         # Imagenette uses 'train' or 'val' as split argument
         split = 'train' if train else 'val'
         imagenette = torchvision.datasets.Imagenette(
@@ -57,6 +57,7 @@ def get_dataset(
         )
         logger.info(f"Loaded Imagenette dataset ({split}) with {len(imagenette)} samples")
         return imagenette
+    
     elif dataset_name == 'imagenet100':
         # ImageNet100 from Kaggle: https://www.kaggle.com/datasets/ambityga/imagenet100
         # Structure: data_path/train.X1/, train.X2/, train.X3/, train.X4/ and data_path/val.X/
