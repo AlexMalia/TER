@@ -136,6 +136,8 @@ class DinoTrainer:
         epoch_loss = 0.0
         num_batches = self.niter_per_epoch if self.is_streaming else len(self.train_loader)
 
+        accumulation_steps = self.config.training.gradient_accumulation_steps
+
         # Progress bar (with total if known, otherwise streaming mode)
         pbar = tqdm(
             self.train_loader,
@@ -143,6 +145,8 @@ class DinoTrainer:
             leave=True,
             total=num_batches if not self.is_streaming else None
         )
+
+        self.optimizer.zero_grad()
 
         for batch_idx, (view_set, _) in enumerate(pbar):
             # Move views to device
@@ -163,49 +167,60 @@ class DinoTrainer:
             # Compute loss
             loss = self.loss_fn(student_output, teacher_output)
 
+            loss = loss / accumulation_steps
+
             # Backward pass
-            self.optimizer.zero_grad()
             loss.backward()
 
-            # Gradient clipping
-            if self.config.training.gradient_clip is not None:
-                torch.nn.utils.clip_grad_norm_(
-                    self.student.parameters(),
-                    self.config.training.gradient_clip
-                )
-
-            # Optimizer step - train student
-            self.optimizer.step()
-
-            # Learning rate scheduler step
-            if self.scheduler is not None:
-                self.scheduler.step()
-
-            # EMA update for teacher
-            if self.momentum_schedule is not None:
-                momentum = self.momentum_schedule[self.current_iteration]
-            else:
-                momentum = self.config.training.teacher_momentum
-
-            update_teacher_EMA(self.student, self.teacher, alpha=momentum)
-
-            # Update statistics
             epoch_loss += loss.item()
-            current_lr = self.optimizer.param_groups[0]['lr']
-            self.history.record_iteration(
-                iteration=self.current_iteration,
-                metrics={
-                    'loss': loss.item(),
-                    'learning_rate': current_lr,
-                    'momentum': momentum
-                }
-            )
-            self.current_iteration += 1
+
+            if (batch_idx + 1) % accumulation_steps == 0:
+                # Gradient clipping
+                if self.config.training.gradient_clip is not None:
+                    torch.nn.utils.clip_grad_norm_(
+                        self.student.parameters(),
+                        self.config.training.gradient_clip
+                    )
+
+                # Optimizer step - train student
+                self.optimizer.step()
+
+                # Reset gradients après la mise à jour
+                self.optimizer.zero_grad()
+
+                # Learning rate scheduler step
+                if self.scheduler is not None:
+                    self.scheduler.step()
+
+                # EMA update for teacher
+                if self.momentum_schedule is not None:
+                    momentum = self.momentum_schedule[self.current_iteration]
+                else:
+                    momentum = self.config.training.teacher_momentum
+
+                update_teacher_EMA(self.student, self.teacher, alpha=momentum)
+
+                # Record iteration metrics (seulement lors des vraies updates)
+                current_lr = self.optimizer.param_groups[0]['lr']
+                self.history.record_iteration(
+                    iteration=self.current_iteration,
+                    metrics={
+                        'loss': loss.item(),
+                        'learning_rate': current_lr,
+                        'momentum': momentum
+                    }
+                )
+                self.current_iteration += 1
 
             # Update progress bar
+            if self.momentum_schedule is not None:
+                momentum = self.momentum_schedule[min(self.current_iteration, len(self.momentum_schedule) - 1)]
+            else:
+                momentum = self.config.training.teacher_momentum
             pbar.set_postfix({'loss': f"{loss.item():.4f}", 'momentum': f"{momentum:.4f}"})
 
-            # Log periodically
+
+             # Log periodically
             if (batch_idx + 1) % self.config.logging.log_every_n_iters == 0:
                 progress_str = f"{batch_idx+1}" if self.is_streaming else f"{batch_idx+1}/{num_batches}"
                 logger.info(
@@ -231,10 +246,30 @@ class DinoTrainer:
 
                 logger.debug(f"Gradient norms:")
                 for name, param in self.student.named_parameters():
-                    # Check if the param is learnable (requires_grad) AND has a gradient calculated
                     if param.requires_grad and param.grad is not None:
                         grad_norm = param.grad.data.norm(2).item()
                         logger.debug(f"  {name}: {grad_norm:.4f}")
+
+        if (batch_idx + 1) % accumulation_steps != 0:
+            if self.config.training.gradient_clip is not None:
+                torch.nn.utils.clip_grad_norm_(
+                    self.student.parameters(),
+                    self.config.training.gradient_clip
+                )
+
+            self.optimizer.step()
+            self.optimizer.zero_grad()
+
+            if self.scheduler is not None:
+                self.scheduler.step()
+
+            if self.momentum_schedule is not None:
+                momentum = self.momentum_schedule[self.current_iteration]
+            else:
+                momentum = self.config.training.teacher_momentum
+
+            update_teacher_EMA(self.student, self.teacher, alpha=momentum)
+            self.current_iteration += 1
 
         # Compute epoch metrics (use actual batch count for streaming)
         actual_batches = batch_idx + 1

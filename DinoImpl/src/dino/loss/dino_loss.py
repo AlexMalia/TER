@@ -144,8 +144,7 @@ class DinoLoss(nn.Module):
         batch_center = teacher_output.mean(dim=0, keepdim=True)  # [1, out_dim]
 
         # EMA update: new_center = momentum * old_center + (1 - momentum) * batch_center
-        self.center = self.center * self.center_momentum + \
-                      batch_center * (1.0 - self.center_momentum)
+        self.center = self.center * self.center_momentum + batch_center * (1.0 - self.center_momentum)
 
 
     def get_center(self) -> torch.Tensor:

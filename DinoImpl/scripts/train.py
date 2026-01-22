@@ -211,9 +211,13 @@ def main():
     else:
         raise ValueError(f"Unknown optimizer: {config.optimizer.optimizer}")
 
-    # Create learning rate scheduler with warmup + cosine decay
-    total_steps = config.training.num_epochs * len(train_loader)
-    warmup_steps = config.scheduler.warmup_epochs * len(train_loader)
+    accumulation_steps = config.training.gradient_accumulation_steps
+
+    # Nombre de vraies updates par epoch (pas le nombre de forward passes)
+    updates_per_epoch = len(train_loader) // accumulation_steps
+
+    total_steps = config.training.num_epochs * updates_per_epoch
+    warmup_steps = config.scheduler.warmup_epochs * updates_per_epoch
 
     warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
         optimizer,
@@ -231,7 +235,11 @@ def main():
         schedulers=[warmup_scheduler, cosine_scheduler],
         milestones=[warmup_steps]
     )
-    logger.info(f"Created scheduler with {warmup_steps} warmup steps, {total_steps} total steps")
+
+    logger.info(
+        f"Created scheduler with {warmup_steps} warmup steps, {total_steps} total steps "
+        f"(accumulation_steps={accumulation_steps})"
+    )
 
     # Create trainer
     trainer = DinoTrainer(

@@ -109,6 +109,7 @@ class TrainingConfig:
     teacher_momentum_schedule: bool = True
     teacher_momentum_final: float = 1.0
     gradient_clip: Optional[float] = 3.0
+    gradient_accumulation_steps: int = 1
     mixed_precision: bool = False
     seed: int = 42
     device: str = "cuda"

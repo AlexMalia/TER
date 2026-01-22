@@ -51,7 +51,7 @@ class DinoBackbone(BackboneBase):
         Returns:
             Feature tensor of shape [batch_size, output_dim]
         """
-        outputs = self.model(x)
+        outputs = self.model(x, interpolate_pos_encoding=True)
         cls_token = outputs.last_hidden_state[:, 0]
         return cls_token
 

@@ -3,8 +3,8 @@
 # 100 classes, 130k train images, 5k val images
 
 data:
-  dataset: imagenet100
-  data_path: ./dataset/imagenet100
+  dataset: imagenette
+  data_path: ./dataset
   batch_size: 64
   num_workers: 4
   pin_memory: true
