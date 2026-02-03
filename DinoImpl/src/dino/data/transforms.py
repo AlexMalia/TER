@@ -135,7 +135,7 @@ class DINOTransform:
     @classmethod
     def from_config(cls, augmentation_config) -> 'DINOTransform':
         """
-        Create DINOTransform from AugmentationConfig.
+        Factory method to create DINOTransform from AugmentationConfig.
 
         Args:
             augmentation_config: AugmentationConfig instance

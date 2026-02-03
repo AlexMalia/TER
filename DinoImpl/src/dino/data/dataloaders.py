@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader, Dataset
 from typing import Optional, Tuple, Union
 import logging
 
-from .datasets import get_dataset, create_train_val_test_splits, get_streaming_dataset
+from .datasets import get_dataset, create_train_val_test_splits
 from .transforms import DINOTransform
 
 logger = logging.getLogger(__name__)
@@ -71,9 +71,6 @@ def create_dataloaders(
         ...     print(len(views))  # 8 (2 global + 6 local)
         ...     break
     """
-    # Check if streaming mode is enabled
-    if getattr(config.data, 'streaming', False):
-        return create_streaming_dataloaders(config, return_test)
 
     # Create transform
     transform = DINOTransform.from_config(config.augmentation)
@@ -135,99 +132,6 @@ def create_dataloaders(
         f"train={len(train_loader)} batches, "
         f"val={len(val_loader) if val_loader else 0} batches, "
         f"test={len(test_loader) if test_loader else 0} batches"
-    )
-
-    return train_loader, val_loader, test_loader
-
-
-def create_streaming_dataloaders(
-    config,
-    return_test: bool = False
-) -> Tuple[DataLoader, Optional[DataLoader], Optional[DataLoader]]:
-    """
-    Create streaming dataloaders from HuggingFace datasets.
-
-    This allows training on large datasets without downloading them entirely.
-    Data is streamed on-the-fly during training.
-
-    Args:
-        config: DinoConfig instance
-        return_test: Whether to return test dataloader
-
-    Returns:
-        Tuple of (train_loader, val_loader, test_loader)
-
-    Note:
-        - Streaming dataloaders don't support len() (infinite iteration)
-        - Use config.data.streaming_train_samples to limit samples per epoch
-        - Shuffle is done via buffer shuffling (config.data.shuffle_buffer_size)
-    """
-    transform = DINOTransform.from_config(config.augmentation)
-
-    logger.info(f"Creating streaming dataloaders for {config.data.dataset}")
-
-    # Create streaming datasets for each split
-    train_dataset = get_streaming_dataset(
-        dataset_name=config.data.dataset,
-        split='train',
-        transform=transform,
-        shuffle=True,
-        shuffle_buffer_size=getattr(config.data, 'shuffle_buffer_size', 10000),
-        seed=config.data.seed
-    )
-
-    val_dataset = get_streaming_dataset(
-        dataset_name=config.data.dataset,
-        split='validation',
-        transform=transform,
-        shuffle=False,
-        seed=config.data.seed
-    )
-
-    # Create dataloaders
-    # Note: For IterableDataset, shuffle must be False (handled in dataset)
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=config.data.batch_size,
-        shuffle=False,  # Shuffle is done in the streaming dataset
-        num_workers=config.data.num_workers,
-        pin_memory=config.data.pin_memory,
-        collate_fn=collate_multi_crop,
-        drop_last=True
-    )
-
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=config.data.batch_size,
-        shuffle=False,
-        num_workers=config.data.num_workers,
-        pin_memory=config.data.pin_memory,
-        collate_fn=collate_multi_crop,
-        drop_last=False
-    )
-
-    test_loader = None
-    if return_test:
-        test_dataset = get_streaming_dataset(
-            dataset_name=config.data.dataset,
-            split='test',
-            transform=transform,
-            shuffle=False,
-            seed=config.data.seed
-        )
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=config.data.batch_size,
-            shuffle=False,
-            num_workers=config.data.num_workers,
-            pin_memory=config.data.pin_memory,
-            collate_fn=collate_multi_crop,
-            drop_last=False
-        )
-
-    logger.info(
-        f"Created streaming dataloaders for {config.data.dataset} "
-        f"(batch_size={config.data.batch_size})"
     )
 
     return train_loader, val_loader, test_loader

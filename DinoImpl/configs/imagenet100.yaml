@@ -70,12 +70,12 @@ training:
   device: cuda
 
 checkpoint:
-  checkpoint_dir: ./checkpoints/imagenet100
+  checkpoint_dir: ./outputs/checkpoints/imagenet100
   save_every_n_epochs: 10
   save_best: true
   resume_from: null
 
 logging:
-  log_dir: ./logs/imagenet100
+  log_dir: ./outputs/logs/imagenet100
   log_every_n_iters: 50
   log_verbosity: debug

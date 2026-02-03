@@ -60,12 +60,12 @@ training:
   device: cuda
 
 checkpoint:
-  checkpoint_dir: ./checkpoints
+  checkpoint_dir: ./outputs/checkpoints
   save_every_n_epochs: 1
   save_best: true
   resume_from: null
 
 logging:
-  log_dir: ./logs
+  log_dir: ./outputs/logs
   log_every_n_iters: 10
   log_verbosity: info

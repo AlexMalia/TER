@@ -50,6 +50,11 @@ dev = [
     "isort>=5.10.0",
     "flake8>=5.0.0",
 ]
+docs = [
+    "mkdocs>=1.5",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.24",
+]
 wandb = ["wandb>=0.13.0"]
 notebooks = ["jupyter>=1.0.0"]
 

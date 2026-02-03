@@ -1,7 +1,7 @@
 data:
   dataset: imagenette
   data_path: ./dataset
-  batch_size: 196
+  batch_size: 12
   num_workers: 4
   pin_memory: true
   train_split: 0.7
@@ -31,7 +31,7 @@ augmentation:
   normalize_std: [0.229, 0.224, 0.225]
 
 model:
-  backbone: resnet18
+  backbone: dino_vits16
   backbone_pretrained: false
   projection_hidden_dim: 1024
   projection_bottleneck_dim: 256
@@ -65,12 +65,12 @@ training:
   device: cuda
 
 checkpoint:
-  checkpoint_dir: ./checkpoints
+  checkpoint_dir: ./outputs/checkpoints
   save_every_n_epochs: 1
   save_best: true
   resume_from: null
 
 logging:
-  log_dir: ./logs
+  log_dir: ./outputs/logs
   log_every_n_iters: 10
   log_verbosity: debug

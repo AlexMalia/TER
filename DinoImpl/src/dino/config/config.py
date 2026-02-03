@@ -18,18 +18,13 @@ class DataConfig:
     train_split: float = 0.7
     val_split: float = 0.15
     seed: int = 42
-    # Streaming options (for HuggingFace datasets)
-    streaming: bool = False
-    shuffle_buffer_size: int = 10000
-    # For streaming, specify number of samples per epoch (since len() is unavailable)
-    streaming_train_samples: Optional[int] = None
-    streaming_val_samples: Optional[int] = None
 
 
 @dataclass
 class AugmentationConfig:
     """Data augmentation configuration."""
 
+    n_global_crops: int = 2
     num_local_views: int = 6
     global_crop_size: int = 224
     local_crop_size: int = 96
@@ -56,6 +51,11 @@ class AugmentationConfig:
     # Normalization
     normalize_mean: Tuple[float, float, float] = (0.485, 0.456, 0.406)
     normalize_std: Tuple[float, float, float] = (0.229, 0.224, 0.225)
+
+    @property
+    def ncrops(self) -> int:
+        """Total number of crops (global + local)."""
+        return self.n_global_crops + self.num_local_views
 
 
 @dataclass
@@ -134,11 +134,19 @@ class LoggingConfig:
     log_dir: str = "./logs"
     log_every_n_iters: int = 10
     log_verbosity: str = "info"
-    use_tensorboard: bool = True
-    use_wandb: bool = False
-    wandb_project: Optional[str] = None
-    wandb_entity: Optional[str] = None
-    wandb_run_name: Optional[str] = None
+
+
+_CONFIG_CLASSES = {
+    'data': DataConfig,
+    'augmentation': AugmentationConfig,
+    'model': ModelConfig,
+    'loss': LossConfig,
+    'optimizer': OptimizerConfig,
+    'scheduler': SchedulerConfig,
+    'training': TrainingConfig,
+    'checkpoint': CheckpointConfig,
+    'logging': LoggingConfig,
+}
 
 
 @dataclass
@@ -170,32 +178,12 @@ class DinoConfig:
     def from_yaml(cls, path: str) -> 'DinoConfig':
         """Load configuration from YAML file."""
         with open(path) as f:
-            data = yaml.safe_load(f)
+            data = yaml.safe_load(f) or {}
 
-        if data is None:
-            return cls()
-
-        # Reconstruct nested dataclasses
         config_dict = {}
         for key, value in data.items():
-            if key == 'data':
-                config_dict[key] = DataConfig(**value)
-            elif key == 'augmentation':
-                config_dict[key] = AugmentationConfig(**value)
-            elif key == 'model':
-                config_dict[key] = ModelConfig(**value)
-            elif key == 'loss':
-                config_dict[key] = LossConfig(**value)
-            elif key == 'optimizer':
-                config_dict[key] = OptimizerConfig(**value)
-            elif key == 'scheduler':
-                config_dict[key] = SchedulerConfig(**value)
-            elif key == 'training':
-                config_dict[key] = TrainingConfig(**value)
-            elif key == 'checkpoint':
-                config_dict[key] = CheckpointConfig(**value)
-            elif key == 'logging':
-                config_dict[key] = LoggingConfig(**value)
+            if key in _CONFIG_CLASSES and isinstance(value, dict):
+                config_dict[key] = _CONFIG_CLASSES[key](**value)
 
         return cls(**config_dict)
 

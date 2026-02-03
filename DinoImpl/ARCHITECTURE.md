@@ -57,20 +57,28 @@ src/dino/
 │   ├── dataloaders.py      # DataLoader creation
 │   └── __init__.py
 ├── models/                  # Neural network architectures
-│   ├── backbone.py         # ResNet and future backbones
-│   ├── projection.py       # Projection head
-│   ├── dino_model.py       # Complete DINO model
+│   ├── backbone/           # Backbone architectures
+│   │   ├── backbone.py     # Base class and factory function
+│   │   ├── resnet.py       # ResNet backbones
+│   │   ├── vit.py          # DINO ViT backbones (HuggingFace)
+│   │   └── __init__.py
+│   ├── projection_head.py  # Projection head (with from_config)
+│   ├── dino_model.py       # Complete DINO model (with from_config)
 │   └── __init__.py
 ├── loss/                    # Loss functions
-│   ├── dino_loss.py        # DINO cross-entropy loss
+│   ├── dino_loss.py        # DINO cross-entropy loss (with from_config)
 │   └── __init__.py
 ├── training/                # Training orchestration
 │   ├── trainer.py          # DinoTrainer class
+│   ├── optim.py            # create_optimizer, create_scheduler helpers
+│   └── __init__.py
+├── evaluation/              # Evaluation utilities
 │   └── __init__.py
 └── utils/                   # Shared utilities
     ├── ema.py              # Exponential Moving Average
     ├── checkpoint.py       # Checkpoint management
     ├── logging_utils.py    # Logging setup
+    ├── history.py          # Training history tracking and visualization
     └── __init__.py
 ```
 
@@ -78,12 +86,13 @@ src/dino/
 
 | Module | Responsibility | Key Classes/Functions |
 |--------|----------------|----------------------|
-| `config` | Configuration management | `DinoConfig`, `DataConfig`, `ModelConfig` |
+| `config` | Configuration management | `DinoConfig`, `DataConfig`, `ModelConfig`, `SchedulerConfig` |
 | `data` | Data pipeline | `DINOTransform`, `get_dataset`, `create_dataloaders` |
-| `models` | Neural networks | `ResnetBackboneDino`, `DinoModel` |
-| `loss` | Loss computation | `DinoLoss` |
-| `training` | Training loop | `DinoTrainer` |
-| `utils` | Cross-cutting concerns | `save_checkpoint`, `update_teacher_EMA` |
+| `models` | Neural networks | `ResnetBackboneDino`, `DinoBackbone` (ViT), `DinoModel.from_config()` |
+| `loss` | Loss computation | `DinoLoss`, `DinoLoss.from_config()` |
+| `training` | Training loop | `DinoTrainer`, `create_optimizer`, `create_scheduler` |
+| `evaluation` | Model evaluation | (future: KNN evaluation, linear probing) |
+| `utils` | Cross-cutting concerns | `save_checkpoint`, `update_teacher_EMA`, `History` |
 
 ---
 
@@ -112,6 +121,35 @@ class DinoConfig:
 - Nested structure mirrors logical grouping
 - YAML serialization/deserialization
 - Command-line override support
+
+**AugmentationConfig** includes:
+```python
+@dataclass
+class AugmentationConfig:
+    n_global_crops: int = 2      # Number of global crops
+    num_local_views: int = 6     # Number of local crops
+    # ... other fields
+
+    @property
+    def ncrops(self) -> int:
+        """Total number of crops (global + local)."""
+        return self.n_global_crops + self.num_local_views
+```
+
+**Factory Method Pattern (`from_yaml`)**: The `DinoConfig.from_yaml()` method uses a registry pattern for cleaner config parsing:
+```python
+_CONFIG_CLASSES = {
+    'data': DataConfig,
+    'augmentation': AugmentationConfig,
+    'model': ModelConfig,
+    'loss': LossConfig,
+    'optimizer': OptimizerConfig,
+    'scheduler': SchedulerConfig,
+    'training': TrainingConfig,
+    'checkpoint': CheckpointConfig,
+    'logging': LoggingConfig,
+}
+```
 
 **Why dataclasses?**
 - Type hints for IDE autocomplete
@@ -166,8 +204,14 @@ class DINOTransform:
 **Factory Pattern**: `get_dataset(name, path, transform, ...)`
 
 **Supported Datasets**:
-- CIFAR-100: `torchvision.datasets.CIFAR100`
-- ImageNette: `torchvision.datasets.Imagenette`
+- **ImageNette**: `torchvision.datasets.Imagenette` - 10-class subset of ImageNet
+- **ImageNet100**: Custom loader for Kaggle's 100-class ImageNet subset
+
+**ImageNet100 Details**:
+- Downloaded from Kaggle: `kaggle datasets download -d ambityga/imagenet100`
+- Multi-folder structure: `train.X1`, `train.X2`, `train.X3`, `train.X4` (combined via `ConcatDataset`)
+- Validation folder: `val.X`
+- ~130,000 training images, 5,000 validation images
 
 **Extension Point**: To add new datasets, add case to `get_dataset()`:
 ```python
@@ -200,25 +244,58 @@ def collate_multi_crop(batch):
 
 ### 3. Models (`models/`)
 
-#### Backbone (`backbone.py`)
+#### Backbone (`backbone/`)
 
-**Base Class**: `BackboneBase` (abstract interface)
+**Base Class**: `BackboneBase` (abstract interface in `backbone.py`)
 
 **Implementations**:
-- `ResnetBackboneDino`: ResNet variants (18, 34, 50, 101, 152)
+
+1. **`ResnetBackboneDino`** (`resnet.py`): ResNet variants
+   - Variants: `resnet18`, `resnet34`, `resnet50`, `resnet101`, `resnet152`
+   - Output dim: 512 (ResNet18/34) or 2048 (ResNet50+)
+   - Removes final FC layer, uses penultimate features
+
+2. **`DinoBackbone`** (`vit.py`): DINO ViT variants via HuggingFace transformers
+   - Variants: `dino_vits8`, `dino_vits16`, `dino_vitb8`, `dino_vitb16`
+   - Output dim: 384 (ViT-S) or 768 (ViT-B)
+   - Uses CLS token from last hidden state
+
+**Factory Function**: `get_backbone(name, pretrained=False)`
+```python
+# ResNet
+backbone = get_backbone('resnet18', pretrained=True)
+
+# DINO ViT (from HuggingFace)
+backbone = get_backbone('dino_vits16', pretrained=True)
+```
+
+**ViT Backbone Details**:
+```python
+class DinoBackbone(BackboneBase):
+    VARIANT_MAP = {
+        "dino_vits8": "facebook/dino-vits8",   # Patch size 8, ViT-S
+        "dino_vits16": "facebook/dino-vits16", # Patch size 16, ViT-S
+        "dino_vitb8": "facebook/dino-vitb8",   # Patch size 8, ViT-B
+        "dino_vitb16": "facebook/dino-vitb16", # Patch size 16, ViT-B
+    }
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        outputs = self.model(x, interpolate_pos_encoding=True)
+        return outputs.last_hidden_state[:, 0]  # CLS token
+```
 
 **Key Method**:
 ```python
 def forward(self, x: Tensor) -> Tensor:
     """Extract features from input images"""
-    return self.model(x)  # [batch, 512] for ResNet18
+    return self.model(x)  # [batch, output_dim]
 ```
 
-**Design Choice**: Remove final FC layer, use penultimate features
+#### Projection Head (`projection_head.py`)
 
-#### Projection Head (`projection.py`)
+**Class**: `DinoProjectionHead`
 
-**Class**: `CovNetProjectionHeadDino`
+This is a **backbone-agnostic MLP** that works identically with any feature extractor (ResNet, ViT, etc.).
 
 **Architecture** (DINO paper):
 ```
@@ -235,6 +312,20 @@ L2 Normalize
 Weight-Normalized Linear(256 → 2048)
     ↓
 Output (2048)
+```
+
+**Factory Method**:
+```python
+@classmethod
+def from_config(cls, model_config: ModelConfig, input_dim: int) -> "DinoProjectionHead":
+    """Create projection head from config."""
+    return cls(
+        input_dim=input_dim,
+        hidden_dim=model_config.projection_hidden_dim,
+        bottleneck_dim=model_config.projection_bottleneck_dim,
+        output_dim=model_config.projection_output_dim,
+        use_bn=model_config.projection_use_bn,
+    )
 ```
 
 **Why weight normalization?**
@@ -262,6 +353,25 @@ class DinoModel(nn.Module):
         return projections
 ```
 
+**Factory Method**:
+```python
+@classmethod
+def from_config(cls, config: DinoConfig) -> "DinoModel":
+    """Create complete DINO model from config.
+
+    Automatically creates backbone and projection head with correct dimensions.
+    """
+    backbone = get_backbone(
+        config.model.backbone,
+        pretrained=config.model.pretrained_backbone
+    )
+    projection_head = DinoProjectionHead.from_config(
+        config.model,
+        input_dim=backbone.output_dim
+    )
+    return cls(backbone, projection_head)
+```
+
 **Why separate backbone and projection?**
 - Backbone features are useful for downstream tasks
 - Projection head only needed during pre-training
@@ -270,6 +380,26 @@ class DinoModel(nn.Module):
 ### 4. Loss Function (`loss/dino_loss.py`)
 
 **Class**: `DinoLoss`
+
+**Factory Method**:
+```python
+@classmethod
+def from_config(
+    cls,
+    loss_config: LossConfig,
+    aug_config: AugmentationConfig,
+    out_dim: int
+) -> "DinoLoss":
+    """Create DinoLoss from config objects."""
+    return cls(
+        out_dim=out_dim,
+        student_temp=loss_config.student_temp,
+        teacher_temp=loss_config.teacher_temp,
+        center_momentum=loss_config.center_momentum,
+        ncrops=aug_config.ncrops,
+        n_global_crops=aug_config.n_global_crops,
+    )
+```
 
 **Core Computation**:
 ```python
@@ -406,6 +536,58 @@ checkpoint = {
 - Losing it would break loss computation
 - Critical for training continuity
 
+#### History Tracking (`history.py`)
+
+**Class**: `History`
+
+**Purpose**: Track and visualize training metrics over time
+
+**Core Features**:
+- Records metrics at iteration and epoch granularity
+- JSON serialization/deserialization
+- Matplotlib plotting for loss, learning rate, and momentum
+- Pandas DataFrame export
+
+**API**:
+```python
+# Create and record
+history = History(metadata={'config': config.to_dict()})
+history.record_iteration(iter, {'loss': 2.5, 'learning_rate': 0.001, 'momentum': 0.996})
+history.record_epoch(epoch, {'loss': 2.3, 'learning_rate': 0.001, 'momentum': 0.997})
+
+# Save/Load
+history.save('training_history.json')
+history = History.load('training_history.json')
+
+# Access metrics
+losses = history.get_metric('loss', level='epoch')
+iterations = history.get_iterations()
+
+# Plotting
+history.plot_loss(level='epoch')
+history.plot_learning_rate(level='iteration')
+history.plot_momentum(level='iteration')
+history.plot_all(level='epoch', save_path='plots.png')
+
+# Export
+df = history.to_dataframe(level='epoch')  # Requires pandas
+```
+
+**Data Structure**:
+```python
+{
+    'metadata': {'created_at': '...', 'config': {...}},
+    'iteration_metrics': [
+        {'iteration': 0, 'timestamp': '...', 'loss': 2.5, 'learning_rate': 0.001, 'momentum': 0.996},
+        ...
+    ],
+    'epoch_metrics': [
+        {'epoch': 1, 'timestamp': '...', 'loss': 2.3, 'learning_rate': 0.001, 'momentum': 0.997},
+        ...
+    ]
+}
+```
+
 ---
 
 ## Data Flow
@@ -462,11 +644,31 @@ DinoConfig
 ├── ModelConfig         # Backbone, projection dims
 ├── LossConfig          # Temperatures, center momentum
 ├── OptimizerConfig     # Learning rate, weight decay
-├── SchedulerConfig     # LR schedule (future)
+├── SchedulerConfig     # Learning rate scheduler configuration
 ├── TrainingConfig      # Epochs, teacher momentum
 ├── CheckpointConfig    # Save frequency, directory
 └── LoggingConfig       # Log directory, TensorBoard
 ```
+
+### SchedulerConfig Details
+
+The `SchedulerConfig` dataclass configures learning rate scheduling:
+
+```python
+@dataclass
+class SchedulerConfig:
+    scheduler: str = "cosine_warmup"   # Scheduler type
+    warmup_epochs: int = 10            # Number of warmup epochs
+    min_lr: float = 1e-6               # Minimum learning rate
+    warmup_start_lr: float = 0.0       # Starting LR for warmup
+```
+
+**Scheduler Types**:
+- `cosine_warmup`: Cosine annealing with linear warmup (recommended)
+
+**How it works**:
+1. Linear warmup from `warmup_start_lr` to `optimizer.lr` over `warmup_epochs`
+2. Cosine decay from `optimizer.lr` to `min_lr` for remaining epochs
 
 ### Override Mechanism
 
@@ -511,16 +713,35 @@ class LossConfig:
 
 ### Initialization Sequence
 
+The initialization has been simplified using factory methods:
+
 1. **Configuration**: Load YAML → Override with CLI args
 2. **Logging**: Setup file and console handlers
-3. **Data**: Create transforms → Load dataset → Split → Create loaders
-4. **Models**: Create backbone → Create projection → Wrap in DinoModel
+3. **Data**: Create dataloaders with `create_dataloaders(config)`
+4. **Models**: Create with `DinoModel.from_config(config)` (handles backbone + projection)
 5. **Teacher**: Copy student weights → Disable gradients
-6. **Loss**: Initialize with center buffer
-7. **Optimizer**: Create with parameters
-8. **Trainer**: Assemble all components
-9. **Resume** (optional): Load checkpoint
-10. **Train**: Run training loop
+6. **Loss**: Create with `DinoLoss.from_config(config.loss, config.augmentation, out_dim)`
+7. **Optimizer**: Create with `create_optimizer(params, config.optimizer)`
+8. **Scheduler**: Create with `create_scheduler(optimizer, config.scheduler, config.optimizer, total_steps, warmup_steps)`
+9. **Trainer**: Assemble all components
+10. **Resume** (optional): Load checkpoint
+11. **Train**: Run training loop
+
+**Simplified Example** (see `scripts/train.py`):
+```python
+# Load config
+config = DinoConfig.from_yaml('config.yaml')
+
+# Create all components with factory methods
+train_loader, val_loader, _ = create_dataloaders(config)
+student = DinoModel.from_config(config)
+teacher = DinoModel.from_config(config)
+teacher.load_state_dict(student.state_dict())
+
+loss_fn = DinoLoss.from_config(config.loss, config.augmentation, student.output_dim)
+optimizer = create_optimizer(student.parameters(), config.optimizer)
+scheduler = create_scheduler(optimizer, config.scheduler, config.optimizer, total_steps, warmup_steps)
+```
 
 ### Training Loop Anatomy
 
@@ -559,22 +780,88 @@ for epoch in range(start_epoch, num_epochs):
         # 7. Optimizer step
         optimizer.step()
 
-        # 8. EMA update for teacher
+        # 8. Learning rate scheduler step (per iteration)
+        if scheduler is not None:
+            scheduler.step()
+
+        # 9. EMA update for teacher
         momentum = get_current_momentum()
         update_teacher_EMA(student, teacher, momentum)
 
-        # 9. Logging
+        # 10. Logging and history tracking
         if should_log(batch_idx):
-            logger.info(f"Loss: {loss.item():.4f}")
-            history.append(loss.item())
+            current_lr = optimizer.param_groups[0]['lr']
+            logger.info(f"Loss: {loss.item():.4f}, LR: {current_lr:.6f}")
+            history.record_iteration(iteration, {
+                'loss': loss.item(),
+                'learning_rate': current_lr,
+                'momentum': momentum
+            })
 
-        # 10. Checkpointing
+        # 11. Checkpointing
         if should_save(batch_idx):
             save_checkpoint(...)
 
     # End of epoch
+    history.record_epoch(epoch, {...})
     log_epoch_metrics()
     save_checkpoint()
+```
+
+---
+
+## Factory Methods Pattern
+
+The codebase uses a consistent `from_config()` pattern across components to simplify initialization. This reduces boilerplate in training scripts and ensures correct parameter wiring.
+
+### Overview
+
+| Component | Factory Method | Purpose |
+|-----------|---------------|---------|
+| `DinoModel` | `from_config(config)` | Creates backbone + projection with correct dimensions |
+| `DinoProjectionHead` | `from_config(model_config, input_dim)` | Creates projection head from model config |
+| `DinoLoss` | `from_config(loss_config, aug_config, out_dim)` | Creates loss with correct crop counts |
+| `DINOTransform` | `from_config(aug_config)` | Creates multi-crop transform |
+
+### Optimizer & Scheduler Helpers
+
+The `training/optim.py` module provides helper functions:
+
+```python
+from dino.training import create_optimizer, create_scheduler
+
+# Create optimizer from config
+optimizer = create_optimizer(model.parameters(), config.optimizer)
+
+# Create scheduler (handles warmup + cosine decay)
+scheduler = create_scheduler(
+    optimizer,
+    config.scheduler,
+    config.optimizer,
+    total_steps=total_steps,
+    warmup_steps=warmup_steps
+)
+```
+
+### Benefits
+
+1. **Less boilerplate**: ~90 lines reduced to ~30 lines in train.py
+2. **Correct wiring**: Dimensions and parameters automatically matched
+3. **Consistency**: Same pattern across all components
+4. **Testability**: Factory methods can be unit tested independently
+
+### Manual Creation Still Supported
+
+The factory methods are an **alternative** - manual creation remains valid:
+
+```python
+# Manual (still works)
+backbone = get_backbone('resnet18')
+projection = DinoProjectionHead(input_dim=512, output_dim=2048)
+model = DinoModel(backbone, projection)
+
+# Factory method (simpler)
+model = DinoModel.from_config(config)
 ```
 
 ---
@@ -657,28 +944,39 @@ default_collate(batch)  # Fails! Can't stack lists of different lengths
 
 ### Adding a New Backbone
 
-1. **Create backbone class** in `src/dino/models/backbone.py`:
+The codebase already includes two backbone implementations as examples:
+
+1. **ResNet** (`src/dino/models/backbone/resnet.py`): Uses torchvision
+2. **DINO ViT** (`src/dino/models/backbone/vit.py`): Uses HuggingFace transformers
+
+To add a new backbone:
+
+1. **Create backbone class** in `src/dino/models/backbone/`:
 ```python
-class ViTBackboneDino(BackboneBase):
-    def __init__(self, variant='vit_small'):
+# src/dino/models/backbone/efficientnet.py
+from .backbone import BackboneBase
+import timm
+
+class EfficientNetBackbone(BackboneBase):
+    def __init__(self, variant='efficientnet_b0', pretrained=False):
         super().__init__()
-        self.model = timm.create_model(variant, pretrained=False)
-        self.output_dim = self.model.embed_dim
+        self.model = timm.create_model(variant, pretrained=pretrained, num_classes=0)
+        self.output_dim = self.model.num_features
 
     def forward(self, x):
-        return self.model.forward_features(x)
+        return self.model(x)
 ```
 
-2. **Update factory function**:
+2. **Update factory function** in `src/dino/models/backbone/backbone.py`:
 ```python
 def get_backbone(name, pretrained=False):
-    if name.startswith('vit'):
-        return ViTBackboneDino(name, pretrained)
-    elif name.startswith('resnet'):
-        return ResnetBackboneDino(name, pretrained)
+    # ... existing code ...
+    elif name.startswith('efficientnet'):
+        from .efficientnet import EfficientNetBackbone
+        return EfficientNetBackbone(name, pretrained)
 ```
 
-3. **Update config** and run!
+3. **Export in `__init__.py`** and update config!
 
 ### Adding a New Dataset
 
@@ -911,10 +1209,11 @@ python scripts/train.py --config configs/test.yaml --epochs 1
 
 - Official DINO: https://github.com/facebookresearch/dino
 - PyTorch Examples: https://github.com/pytorch/examples
-- Timm (for future ViT support): https://github.com/huggingface/pytorch-image-models
+- HuggingFace Transformers (for ViT backbones): https://github.com/huggingface/transformers
+- Timm: https://github.com/huggingface/pytorch-image-models
 
 ---
 
-**Last Updated**: January 2026
+**Last Updated**: February 2026
 
 For questions or improvements, open an issue or PR!

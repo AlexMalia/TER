@@ -1,10 +1,15 @@
 """DINO loss implementation with centering and sharpening."""
 
+from __future__ import annotations
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import logging
+
+if TYPE_CHECKING:
+    from dino.config import LossConfig, AugmentationConfig
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +159,33 @@ class DinoLoss(nn.Module):
     def reset_center(self):
         """Reset the center to zeros."""
         self.center.zero_()
+
+    @classmethod
+    def from_config(
+        cls,
+        loss_config: LossConfig,
+        aug_config: AugmentationConfig,
+        out_dim: int
+    ) -> DinoLoss:
+        """
+        Create a DinoLoss from configuration dataclasses.
+
+        Args:
+            loss_config: Loss configuration dataclass
+            aug_config: Augmentation configuration dataclass
+            out_dim: Output dimension of the projection head
+
+        Returns:
+            Configured DinoLoss instance
+        """
+        return cls(
+            out_dim=out_dim,
+            student_temp=loss_config.student_temp,
+            teacher_temp=loss_config.teacher_temp,
+            center_momentum=loss_config.center_momentum,
+            n_global_crops=aug_config.n_global_crops,
+            ncrops=aug_config.ncrops
+        )
 
     def __repr__(self) -> str:
         return (

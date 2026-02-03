@@ -319,7 +319,7 @@ training:
 checkpoint:
   # Directory where checkpoints will be saved
   # Type: str
-  checkpoint_dir: ./checkpoints
+  checkpoint_dir: ./outputs/checkpoints
 
   # Save checkpoint every N epochs
   # Type: int
@@ -355,7 +355,7 @@ checkpoint:
 logging:
   # Directory where logs will be saved
   # Type: str
-  log_dir: ./logs
+  log_dir: ./outputs/logs
 
   # Log training metrics every N iterations
   # Type: int

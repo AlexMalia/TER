@@ -29,10 +29,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from dino.config.config import DinoConfig
 from dino.data.dataloaders import create_dataloaders
-from dino.models.backbone import get_backbone
-from dino.models import get_projection_head, DinoModel
+from dino.models import DinoModel
 from dino.loss import DinoLoss
-from dino.training import DinoTrainer
+from dino.training import DinoTrainer, create_optimizer, create_scheduler
 from dino.utils import setup_logging, find_latest_checkpoint
 import logging
 
@@ -144,38 +143,10 @@ def main():
 
     # Create models
     logger.info("Creating models...")
-    backbone_student = get_backbone(
-        config.model.backbone,
-        pretrained=config.model.backbone_pretrained
-    )
+    student = DinoModel.from_config(config)
+    teacher = DinoModel.from_config(config)
 
-    projection_head_student = get_projection_head(
-        input_dim=backbone_student.output_dim,
-        output_dim=config.model.projection_output_dim,
-        hidden_dim=config.model.projection_hidden_dim,
-        bottleneck_dim=config.model.projection_bottleneck_dim,
-        use_weight_norm=config.model.use_weight_norm
-    )
-
-    student = DinoModel(backbone_student, projection_head_student)
-
-    # Create teacher as copy of student
-    backbone_teacher = get_backbone(
-        config.model.backbone,
-        pretrained=config.model.backbone_pretrained
-    )
-
-    projection_head_teacher = get_projection_head(
-        input_dim=backbone_teacher.output_dim,
-        output_dim=config.model.projection_output_dim,
-        hidden_dim=config.model.projection_hidden_dim,
-        bottleneck_dim=config.model.projection_bottleneck_dim,
-        use_weight_norm=config.model.use_weight_norm
-    )
-
-    teacher = DinoModel(backbone_teacher, projection_head_teacher)
-
-    # Initialize teacher with student weights
+    # Teacher is a perfect copy of student at initialization
     teacher.load_state_dict(student.state_dict())
     for p in teacher.parameters():
         p.requires_grad = False
@@ -187,29 +158,14 @@ def main():
     )
 
     # Create loss function
-    n_global_crops = 2
-    ncrops = n_global_crops + config.augmentation.num_local_views
-
-    dino_loss = DinoLoss(
-        out_dim=config.model.projection_output_dim,
-        student_temp=config.loss.student_temp,
-        teacher_temp=config.loss.teacher_temp,
-        center_momentum=config.loss.center_momentum,
-        n_global_crops=n_global_crops,
-        ncrops=ncrops
+    dino_loss = DinoLoss.from_config(
+        config.loss,
+        config.augmentation,
+        out_dim=student.output_dim
     )
 
-    # Create optimizer
-    if config.optimizer.optimizer.lower() == "adamw":
-        optimizer = torch.optim.AdamW(
-            student.parameters(),
-            lr=config.optimizer.lr,
-            weight_decay=config.optimizer.weight_decay,
-            betas=config.optimizer.betas,
-            eps=config.optimizer.eps
-        )
-    else:
-        raise ValueError(f"Unknown optimizer: {config.optimizer.optimizer}")
+    # Create optimizer and scheduler
+    optimizer = create_optimizer(student.parameters(), config.optimizer)
 
     accumulation_steps = config.training.gradient_accumulation_steps
 
@@ -219,21 +175,12 @@ def main():
     total_steps = config.training.num_epochs * updates_per_epoch
     warmup_steps = config.scheduler.warmup_epochs * updates_per_epoch
 
-    warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+    scheduler = create_scheduler(
         optimizer,
-        start_factor=1e-8 / config.optimizer.lr,
-        end_factor=1.0,
-        total_iters=warmup_steps
-    )
-    cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer,
-        T_max=total_steps - warmup_steps,
-        eta_min=config.scheduler.min_lr
-    )
-    scheduler = torch.optim.lr_scheduler.SequentialLR(
-        optimizer,
-        schedulers=[warmup_scheduler, cosine_scheduler],
-        milestones=[warmup_steps]
+        config.scheduler,
+        config.optimizer,
+        total_steps,
+        warmup_steps
     )
 
     logger.info(

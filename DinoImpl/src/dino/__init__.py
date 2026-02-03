@@ -14,7 +14,7 @@ Main components:
 Example:
     >>> from dino.config import DinoConfig
     >>> from dino.data import create_dataloaders
-    >>> from dino.models import get_backbone, get_projection_head, DinoModel
+    >>> from dino.models import get_backbone, DinoProjectionHead, DinoModel
     >>> from dino.loss import DinoLoss
     >>> from dino.training import DinoTrainer
     >>>
@@ -28,14 +28,14 @@ Example:
 __version__ = "0.1.0"
 
 from .config import DinoConfig
-from .models import get_backbone, get_projection_head, DinoModel
+from .models import get_backbone, DinoProjectionHead, DinoModel
 from .loss import DinoLoss
 from .training import DinoTrainer
 
 __all__ = [
     'DinoConfig',
     'get_backbone',
-    'get_projection_head',
+    'DinoProjectionHead',
     'DinoModel',
     'DinoLoss',
     'DinoTrainer',

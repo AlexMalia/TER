@@ -13,8 +13,9 @@ wheels/
 dataset/
 
 # Checkpoints
-checkpoints/
+outputs/
 
 logs/
 kaggle/
-plots/
+
+.claude

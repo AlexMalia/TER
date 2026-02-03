@@ -1,8 +1,13 @@
 """DINO model wrapper combining backbone and projection head."""
 
+from __future__ import annotations
+
 import torch
 import torch.nn as nn
-from typing import Tuple, Optional
+from typing import Tuple, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from dino.config import DinoConfig
 
 
 class DinoModel(nn.Module):
@@ -17,9 +22,9 @@ class DinoModel(nn.Module):
 
     Example:
         >>> from dino.models.backbone import get_backbone
-        >>> from dino.models.projection import get_projection_head
+        >>> from dino.models import DinoProjectionHead
         >>> backbone = get_backbone('resnet18')
-        >>> projection_head = get_projection_head(input_dim=backbone.output_dim)
+        >>> projection_head = DinoProjectionHead(input_dim=backbone.output_dim)
         >>> model = DinoModel(backbone, projection_head)
         >>> x = torch.randn(2, 3, 224, 224)
         >>> output = model(x)
@@ -100,6 +105,30 @@ class DinoModel(nn.Module):
             'backbone': backbone,
             'projection': projection
         }
+
+    @classmethod
+    def from_config(cls, config: DinoConfig) -> DinoModel:
+        """
+        Create a DinoModel from a DinoConfig.
+
+        Args:
+            config: Main DINO configuration dataclass
+
+        Returns:
+            Configured DinoModel instance
+        """
+        from .backbone import get_backbone
+        from .projection_head import DinoProjectionHead
+
+        backbone = get_backbone(
+            config.model.backbone,
+            pretrained=config.model.backbone_pretrained
+        )
+        projection_head = DinoProjectionHead.from_config(
+            config.model,
+            input_dim=backbone.output_dim
+        )
+        return cls(backbone, projection_head)
 
     def __repr__(self) -> str:
         param_counts = self.parameter_count()

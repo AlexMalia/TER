@@ -1,14 +1,22 @@
 """Projection head implementations for DINO."""
 
+from __future__ import annotations
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from dino.config import ModelConfig
 
 
-class CovNetProjectionHeadDino(nn.Module):
+class DinoProjectionHead(nn.Module):
     """
     Projection head for DINO as described in the paper.
+
+    This is a backbone-agnostic MLP that works with any feature extractor
+    (ResNet, ViT, etc.).
 
     Architecture:
         - 3-layer MLP with GELU activations
@@ -71,47 +79,31 @@ class CovNetProjectionHeadDino(nn.Module):
         
         return x
 
+    @classmethod
+    def from_config(cls, model_config: ModelConfig, input_dim: int) -> DinoProjectionHead:
+        """
+        Factory function to create a DinoProjectionHead from a ModelConfig.
+
+        Args:
+            model_config: Model configuration dataclass
+            input_dim: Input dimension (backbone output dimension)
+
+        Returns:
+            Configured DinoProjectionHead instance
+        """
+        return cls(
+            input_dim=input_dim,
+            output_dim=model_config.projection_output_dim,
+            hidden_dim=model_config.projection_hidden_dim,
+            bottleneck_dim=model_config.projection_bottleneck_dim,
+            use_weight_norm=model_config.use_weight_norm
+        )
+
     def __repr__(self) -> str:
         return (
-            f"CovNetProjectionHeadDino("
+            f"DinoProjectionHead("
             f"input_dim={self.input_dim}, "
             f"output_dim={self.output_dim}, "
             f"hidden_dim={self.hidden_dim}, "
             f"bottleneck_dim={self.bottleneck_dim})"
         )
-
-
-def get_projection_head(
-    input_dim: int,
-    output_dim: int = 2048,
-    hidden_dim: int = 1024,
-    bottleneck_dim: int = 256,
-    use_weight_norm: bool = True,
-    **kwargs
-) -> nn.Module:
-    """
-    Factory function to get projection head.
-
-    Args:
-        input_dim: Input dimension (backbone output dimension)
-        output_dim: Output dimension
-        hidden_dim: Hidden layer dimension
-        bottleneck_dim: Bottleneck dimension
-        use_weight_norm: Whether to use weight normalization
-        **kwargs: Additional arguments (for future extensions)
-
-    Returns:
-        Projection head instance
-
-    Example:
-        >>> projection_head = get_projection_head(input_dim=512, output_dim=2048)
-        >>> print(projection_head.output_dim)
-        2048
-    """
-    return CovNetProjectionHeadDino(
-        input_dim=input_dim,
-        output_dim=output_dim,
-        hidden_dim=hidden_dim,
-        bottleneck_dim=bottleneck_dim,
-        use_weight_norm=use_weight_norm
-    )
