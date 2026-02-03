@@ -14,7 +14,7 @@ Learn powerful visual representations **without labels** using DINO (Self-DIstil
 
 ```bash
 # Clone the repository
-git clone <your-repo-url>
+git clone https://github.com/AlexMalia/TER.git
 cd DinoImpl
 
 # Install with uv (recommended)
@@ -54,13 +54,13 @@ That's it! Your model will train and save checkpoints to `./checkpoints/`.
 
 ## Documentation
 
-Full documentation is available at: **[Documentation Site](https://your-username.github.io/DinoImpl/)**
+Full documentation is available at: **[Documentation Site](https://alexmalia.github.io/TER/DinoImpl/)**
 
-- [Installation Guide](https://your-username.github.io/DinoImpl/getting-started/installation/)
-- [Quick Start](https://your-username.github.io/DinoImpl/getting-started/quickstart/)
-- [Configuration Reference](https://your-username.github.io/DinoImpl/guides/configuration/)
-- [API Reference](https://your-username.github.io/DinoImpl/api/models/)
-- [Troubleshooting](https://your-username.github.io/DinoImpl/troubleshooting/)
+- [Installation Guide](https://alexmalia.github.io/TER/DinoImpl/getting-started/installation/)
+- [Quick Start](https://alexmalia.github.io/TER/DinoImpl/getting-started/quickstart/)
+- [Configuration Reference](https://alexmalia.github.io/TER/DinoImpl/guides/configuration/)
+- [API Reference](https://alexmalia.github.io/TER/DinoImpl/api/models/)
+- [Troubleshooting](https://alexmalia.github.io/TER/DinoImpl/troubleshooting/)
 
 ### Build Documentation Locally
 

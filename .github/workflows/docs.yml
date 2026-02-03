@@ -36,3 +36,12 @@ jobs:
 
       - name: Build and deploy documentation
         run: mkdocs gh-deploy --force
+
+      - name: Add root redirect
+        run: |
+          git checkout gh-pages
+          cp ../index.html ./index.html
+          git add index.html
+          git commit -m "Add root redirect" || true
+          git push origin gh-pages
+        working-directory: DinoImpl

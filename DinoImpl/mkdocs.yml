@@ -2,6 +2,7 @@ site_name: DINO Implementation
 site_description: Self-supervised vision learning with DINO - A clean PyTorch implementation
 site_author: DINO Implementation Team
 repo_url: https://github.com/AlexMalia/TER
+site_url: https://alexmalia.github.io/TER/DinoImpl/
 repo_name: DinoImpl
 
 theme:
