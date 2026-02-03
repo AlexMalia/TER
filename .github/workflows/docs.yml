@@ -4,11 +4,11 @@ on:
   push:
     branches: [main]
     paths:
-      - 'docs/**'
-      - 'mkdocs.yml'
-      - 'src/**'  # API docs depend on source
+      - 'DinoImpl/docs/**'
+      - 'DinoImpl/mkdocs.yml'
+      - 'DinoImpl/src/**'
       - '.github/workflows/docs.yml'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,6 +16,9 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: DinoImpl
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
