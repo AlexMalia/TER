@@ -94,23 +94,3 @@ DinoImpl/
 └── checkpoints/          # Saved models (auto-created)
 ```
 
----
-
-## Citation
-
-If you use this code in your research, please cite the original DINO paper:
-
-```bibtex
-@inproceedings{caron2021emerging,
-  title={Emerging Properties in Self-Supervised Vision Transformers},
-  author={Caron, Mathilde and Touvron, Hugo and Misra, Ishan and J\'egou, Herv\'e and Mairal, Julien and Bojanowski, Piotr and Joulin, Armand},
-  booktitle={ICCV},
-  year={2021}
-}
-```
-
----
-
-## License
-
-MIT License - see LICENSE file for details.
