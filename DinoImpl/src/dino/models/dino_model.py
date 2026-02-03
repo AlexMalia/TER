@@ -21,15 +21,17 @@ class DinoModel(nn.Module):
         projection_head: Projection head network
 
     Example:
-        >>> from dino.models.backbone import get_backbone
-        >>> from dino.models import DinoProjectionHead
-        >>> backbone = get_backbone('resnet18')
-        >>> projection_head = DinoProjectionHead(input_dim=backbone.output_dim)
-        >>> model = DinoModel(backbone, projection_head)
-        >>> x = torch.randn(2, 3, 224, 224)
-        >>> output = model(x)
-        >>> print(output.shape)
-        torch.Size([2, 2048])
+    ```python
+    from dino.models.backbone import get_backbone
+    from dino.models import DinoProjectionHead
+    backbone = get_backbone('resnet18')
+    projection_head = DinoProjectionHead(input_dim=backbone.output_dim)
+    model = DinoModel(backbone, projection_head)
+    x = torch.randn(2, 3, 224, 224)
+    output = model(x)
+    print(output.shape)
+    torch.Size([2, 2048])
+    ```
     """
 
     def __init__(self, backbone: nn.Module, projection_head: nn.Module):
