@@ -1,7 +1,11 @@
+# Configuration for ImageNet100 dataset
+# Dataset from Kaggle: https://www.kaggle.com/datasets/ambityga/imagenet100
+# 100 classes, 130k train images, 5k val images
+
 data:
-  dataset: imagenette
-  data_path: ./dataset
-  batch_size: 32
+  dataset: imagenet100
+  data_path: ./dataset/imagenet100
+  batch_size: 64
   num_workers: 4
   pin_memory: true
   train_split: 0.85
@@ -31,7 +35,7 @@ augmentation:
   normalize_std: [0.229, 0.224, 0.225]
 
 model:
-  backbone: dino_vits16
+  backbone: resnet34
   backbone_pretrained: false
   projection_hidden_dim: 2048
   projection_bottleneck_dim: 256
@@ -61,17 +65,17 @@ training:
   teacher_momentum_schedule: true
   teacher_momentum_final: 1.0
   gradient_clip: 3.0
-  gradient_accumulation_steps: 16
+  gradient_accumulation_steps: 8
   seed: 42
   device: cuda
 
 checkpoint:
-  checkpoint_dir: ./checkpoints/imagenette/vits16
-  save_every_n_epochs: 1
+  checkpoint_dir: ./checkpoints/imagenet100/resnet
+  save_every_n_epochs: 10
   save_best: true
   resume_from: null
 
 logging:
-  log_dir: ./logs/imagenette/vits16
+  log_dir: ./logs/imagenet100/resnet
   log_every_n_iters: 50
   log_verbosity: debug

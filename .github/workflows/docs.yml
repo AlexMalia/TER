@@ -16,12 +16,11 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: DinoImpl
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -29,19 +28,38 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
+        working-directory: DinoImpl
         run: |
           pip install --upgrade pip
           pip install mkdocs-material mkdocstrings[python]
           pip install -e .
 
-      - name: Build and deploy documentation
-        run: mkdocs gh-deploy --force
-
-      - name: Add root redirect
-        run: |
-          git checkout gh-pages
-          cp ../index.html ./index.html
-          git add index.html
-          git commit -m "Add root redirect" || true
-          git push origin gh-pages
+      - name: Build documentation
         working-directory: DinoImpl
+        run: mkdocs build
+
+      - name: Deploy to gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Create temp directory for deployment
+          mkdir -p /tmp/gh-pages
+
+          # Copy built docs to DinoImpl subfolder
+          mkdir -p /tmp/gh-pages/DinoImpl
+          cp -r DinoImpl/site/* /tmp/gh-pages/DinoImpl/
+
+          # Copy root redirect
+          cp index.html /tmp/gh-pages/
+
+          # Add .nojekyll
+          touch /tmp/gh-pages/.nojekyll
+
+          # Deploy to gh-pages
+          git checkout --orphan gh-pages-new
+          git rm -rf .
+          cp -r /tmp/gh-pages/* .
+          git add -A
+          git commit -m "Deploy documentation"
+          git push origin gh-pages-new:gh-pages --force
