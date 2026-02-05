@@ -30,9 +30,7 @@ jobs:
       - name: Install dependencies
         working-directory: DinoImpl
         run: |
-          pip install --upgrade pip
           pip install mkdocs-material mkdocstrings[python]
-          pip install -e .
 
       - name: Build documentation
         working-directory: DinoImpl
