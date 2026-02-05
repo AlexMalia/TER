@@ -131,7 +131,7 @@ update_teacher_EMA(student, teacher, momentum)
 training:
   teacher_momentum: 0.996
   teacher_momentum_final: 1.0
-  use_momentum_schedule: true
+  teacher_momentum_schedule: true
 ```
 
 ---
@@ -236,8 +236,9 @@ training:
   num_epochs: 100
   teacher_momentum: 0.996
   teacher_momentum_final: 1.0
-  use_momentum_schedule: true
+  teacher_momentum_schedule: true
   gradient_clip: 3.0
+  gradient_accumulation_steps: 1
 
 optimizer:
   optimizer: adamw
@@ -299,6 +300,54 @@ The complete initialization flow:
 9. **Trainer**: Assemble all components
 10. **Resume** (optional): Load checkpoint
 11. **Train**: Run training loop
+
+---
+
+## Gradient Accumulation
+
+When training with limited GPU memory, gradient accumulation allows you to simulate larger batch sizes:
+
+```yaml
+training:
+  gradient_accumulation_steps: 4  # Effective batch = batch_size × 4
+```
+
+**How it works**:
+1. Forward pass and loss computation for each mini-batch
+2. Divide loss by `gradient_accumulation_steps`
+3. Backward pass (gradients accumulate)
+4. After N steps, optimizer step and zero gradients
+
+```python
+for i, batch in enumerate(dataloader):
+    loss = compute_loss(batch) / gradient_accumulation_steps
+    loss.backward()
+
+    if (i + 1) % gradient_accumulation_steps == 0:
+        optimizer.step()
+        optimizer.zero_grad()
+        update_teacher_EMA(student, teacher, momentum)
+```
+
+**Use case**: With `batch_size=8` and `gradient_accumulation_steps=4`, you get the same gradient statistics as `batch_size=32` but using 4× less GPU memory per step.
+
+---
+
+## Streaming Dataset Support
+
+For very large datasets that don't fit in memory, streaming mode loads data on-the-fly:
+
+```yaml
+data:
+  streaming: true  # Enable streaming mode
+```
+
+When `streaming: true` is set, the data pipeline automatically:
+- Uses HuggingFace's streaming dataset API
+- Loads data incrementally rather than all at once
+- Supports datasets larger than available RAM
+
+**Note**: Streaming mode may have slightly higher I/O overhead but enables training on arbitrarily large datasets.
 
 ---
 

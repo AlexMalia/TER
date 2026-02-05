@@ -211,13 +211,59 @@ data:
 
 ## Tensor Shapes
 
+### Complete Transformation Table
+
 | Stage | Shape | Notes |
 |-------|-------|-------|
-| Original image | `[3, H, W]` | Single RGB image |
-| After DINOTransform | `List[8 tensors]` | Each: `[3, crop_size, crop_size]` |
-| After collate | `List[8 batches]` | Each: `[batch, 3, crop_size, crop_size]` |
-| Global views | `[batch, 3, 224, 224]` | 2 views |
-| Local views | `[batch, 3, 96, 96]` | 6 views |
+| Original image | `[3, H, W]` | Single RGB image from dataset |
+| After DINOTransform | `List[8 tensors]` | 2 global + 6 local views |
+| Global crop tensors | `[3, 224, 224]` | Large crops (40-100% of image) |
+| Local crop tensors | `[3, 96, 96]` | Small crops (5-40% of image) |
+| After collate | `List[8 batches]` | Batched by view type |
+| Global view batches | `[batch, 3, 224, 224]` | 2 tensors of this shape |
+| Local view batches | `[batch, 3, 96, 96]` | 6 tensors of this shape |
+| After backbone | `[batch, embed_dim]` | 512 for ResNet18, 2048 for ResNet50 |
+| After projection | `[batch, 2048]` | Final embeddings (output_dim) |
+| Teacher output | `[batch*2, 2048]` | Concatenated global views only |
+| Student output | `[batch*8, 2048]` | Concatenated all views |
+
+### Visual Flow
+
+```
+Dataset Image [3, H, W]
+       │
+       ▼
+┌──────────────────────────────────────────────────────┐
+│                  DINOTransform                        │
+├──────────────────────────────────────────────────────┤
+│  Global View 1: RandomResizedCrop(224) + ColorJitter │
+│  Global View 2: RandomResizedCrop(224) + Solarize   │
+│  Local Views 1-6: RandomResizedCrop(96)             │
+└──────────────────────────────────────────────────────┘
+       │
+       ▼
+List of 8 tensors: [g1, g2, l1, l2, l3, l4, l5, l6]
+       │
+       ▼ (DataLoader with custom collate)
+       │
+List of 8 batched tensors:
+  - views[0]: [B, 3, 224, 224]  # All g1 from batch
+  - views[1]: [B, 3, 224, 224]  # All g2 from batch
+  - views[2-7]: [B, 3, 96, 96]  # All local views
+       │
+       ├─── Teacher (global only) ───────────────────┐
+       │    cat([teacher(v) for v in views[:2]])     │
+       │    Shape: [B*2, 2048]                       │
+       │                                              │
+       └─── Student (all views) ─────────────────────┤
+            cat([student(v) for v in views])         │
+            Shape: [B*8, 2048]                       │
+                                                      │
+                        ┌─────────────────────────────┘
+                        ▼
+                   DinoLoss
+            (cross-entropy + centering)
+```
 
 ---
 

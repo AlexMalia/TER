@@ -117,7 +117,7 @@ model:
   projection_hidden_dim: 1024
   projection_bottleneck_dim: 256
   projection_output_dim: 2048
-  projection_use_bn: false
+  use_weight_norm: true
 ```
 
 ### Using Projection Head
@@ -131,7 +131,7 @@ projection = DinoProjectionHead(
     hidden_dim=1024,
     bottleneck_dim=256,
     output_dim=2048,
-    use_bn=False
+    use_weight_norm=True
 )
 
 # From config
@@ -140,9 +140,13 @@ projection = DinoProjectionHead.from_config(config.model, input_dim=512)
 
 ### Why Weight Normalization?
 
-- Stabilizes training by constraining weight scale
-- Prevents gradient explosion in final layer
-- Used in the original DINO paper
+The projection head uses weight normalization on the final layer for training stability:
+
+- **L2 normalization after bottleneck**: Features are normalized before the final linear layer, ensuring consistent scale regardless of input magnitude
+- **Weight normalization on final layer**: Decouples the direction and magnitude of weights, preventing gradient explosion
+- **Why it matters**: Without these techniques, the self-supervised training can become unstable, especially with high-dimensional output spaces (2048 dimensions)
+
+The original DINO paper found this combination crucial for preventing mode collapse and maintaining stable gradients during the knowledge distillation process
 
 ---
 
@@ -220,13 +224,13 @@ See [Training](training.md) for details on the training loop.
 model:
   # Backbone
   backbone: resnet18           # or dino_vits16, resnet50, etc.
-  pretrained_backbone: false   # Use pretrained weights
+  backbone_pretrained: false   # Use pretrained weights
 
   # Projection head
   projection_hidden_dim: 1024
   projection_bottleneck_dim: 256
   projection_output_dim: 2048
-  projection_use_bn: false
+  use_weight_norm: true        # Weight normalization on final layer
 ```
 
 ---
