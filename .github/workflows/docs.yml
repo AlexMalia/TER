@@ -54,10 +54,10 @@ jobs:
           # Add .nojekyll
           touch /tmp/gh-pages/.nojekyll
 
-          # Deploy to gh-pages
+          # Deploy to gh-pages (use /. to include dotfiles)
           git checkout --orphan gh-pages-new
           git rm -rf .
-          cp -r /tmp/gh-pages/* .
+          cp -r /tmp/gh-pages/. .
           git add -A
           git commit -m "Deploy documentation"
           git push origin gh-pages-new:gh-pages --force
