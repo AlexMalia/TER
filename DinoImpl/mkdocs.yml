@@ -94,6 +94,7 @@ nav:
     - Extending DINO: advanced/extending.md
     - Performance: advanced/performance.md
     - Design Decisions: advanced/design-decisions.md
+    - Testing: advanced/testing.md
   - API Reference:
     - Models: api/models.md
     - Data: api/data.md

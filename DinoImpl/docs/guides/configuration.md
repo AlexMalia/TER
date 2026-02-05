@@ -119,7 +119,7 @@ model:
   projection_hidden_dim: 1024
   projection_bottleneck_dim: 256
   projection_output_dim: 2048
-  projection_use_bn: false    # Batch normalization in projection
+  use_weight_norm: true       # Weight normalization on final layer
 ```
 
 ### LossConfig
@@ -158,7 +158,7 @@ training:
   num_epochs: 100             # Total epochs
   teacher_momentum: 0.996     # EMA momentum for teacher
   teacher_momentum_final: 1.0 # Final momentum (if scheduled)
-  use_momentum_schedule: true # Use momentum scheduling
+  teacher_momentum_schedule: true # Use momentum scheduling
   gradient_clip: 3.0          # Gradient clipping (null to disable)
 ```
 
@@ -280,6 +280,57 @@ transform = DINOTransform.from_config(config.augmentation)
 optimizer = create_optimizer(model.parameters(), config.optimizer)
 scheduler = create_scheduler(optimizer, config.scheduler, config.optimizer, total_steps, warmup_steps)
 ```
+
+---
+
+## Factory Methods Pattern
+
+Components can be created directly from config using `from_config()` methods. This reduces boilerplate and ensures correct parameter wiring.
+
+### Available Factory Methods
+
+| Component | Factory Method | Purpose |
+|-----------|---------------|---------|
+| `DinoModel` | `from_config(config)` | Creates backbone + projection with correct dimensions |
+| `DinoProjectionHead` | `from_config(model_config, input_dim)` | Creates projection head from model config |
+| `DinoLoss` | `from_config(loss_config, aug_config, out_dim)` | Creates loss with correct crop counts |
+| `DINOTransform` | `from_config(aug_config)` | Creates multi-crop transform |
+
+### Benefits
+
+1. **Less boilerplate**: Complex initialization reduced to single lines
+2. **Correct wiring**: Dimensions and parameters automatically matched
+3. **Consistency**: Same pattern across all components
+4. **Testability**: Factory methods can be unit tested independently
+
+### Example: Manual vs Factory Creation
+
+**Manual creation** (verbose but explicit):
+```python
+from dino.models import get_backbone, DinoProjectionHead, DinoModel
+
+backbone = get_backbone('resnet18', pretrained=False)
+projection = DinoProjectionHead(
+    input_dim=backbone.output_dim,  # Must match backbone output!
+    hidden_dim=1024,
+    bottleneck_dim=256,
+    output_dim=2048,
+    use_weight_norm=True
+)
+model = DinoModel(backbone, projection)
+```
+
+**Factory creation** (recommended):
+```python
+from dino.models import DinoModel
+
+model = DinoModel.from_config(config)  # Handles everything automatically
+```
+
+The factory method internally:
+1. Creates the backbone based on `config.model.backbone`
+2. Reads `backbone.output_dim` to wire the projection head correctly
+3. Applies all projection head parameters from `config.model`
 
 ---
 

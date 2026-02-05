@@ -57,8 +57,8 @@ Temperature controls the "sharpness" of the probability distribution:
 
 | Component | Temperature | Effect |
 |-----------|-------------|--------|
-| Student | τ=0.1 | Sharper, more confident |
-| Teacher | τ=0.04 | Even sharper, provides strong guidance |
+| Student | τ=0.1 | Slightly softer, allows learning flexibility |
+| Teacher | τ=0.04 | Sharper, provides confident target distributions |
 
 ```python
 # Student: temperature = 0.1
@@ -67,6 +67,19 @@ student_probs = softmax(logits / 0.1)
 # Teacher: temperature = 0.04 (sharper)
 teacher_probs = softmax(logits / 0.04)
 ```
+
+**Why this asymmetry?**
+
+The temperature difference serves a crucial pedagogical purpose:
+
+1. **Teacher (τ=0.04, sharper)**: The teacher produces highly peaked, confident probability distributions. These act as strong "pseudo-labels" that tell the student which output dimensions are most important for a given input. A lower temperature amplifies small differences in logits.
+
+2. **Student (τ=0.1, softer)**: The student uses a slightly higher temperature, producing softer distributions. This provides:
+   - **Learning flexibility**: The student isn't forced to exactly match the teacher's sharp peaks immediately
+   - **Gradient flow**: Softer distributions provide smoother gradients during backpropagation
+   - **Exploration**: Small but non-zero probabilities on other dimensions allow the student to explore
+
+The ratio (0.1/0.04 = 2.5×) creates a "soft labeling" effect similar to knowledge distillation, where the teacher's confident predictions guide the student without being overly prescriptive
 
 ### Centering
 
@@ -82,18 +95,61 @@ teacher_logits = (teacher_outputs - center) / teacher_temp
 
 **Why centering?**
 
-- Without centering, the model can collapse to predicting the same thing for all inputs
-- Centering ensures the teacher outputs are balanced around zero
-- EMA update provides smooth, stable centering
+Without centering, the model can collapse to a trivial solution where it outputs the same distribution for all inputs. This happens because:
 
-### Asymmetry
+1. The teacher has no gradients - it can drift toward any constant output
+2. The student then learns to match this constant, achieving low loss without learning useful features
+
+**The centering mechanism**:
+
+$$c \leftarrow m \cdot c + (1 - m) \cdot \mathbb{E}_{x}[g_{\theta_t}(x)]$$
+
+Where:
+- $c$ is the center vector (same dimension as output, e.g., 2048)
+- $m$ is the center momentum (default 0.9)
+- $g_{\theta_t}(x)$ is the teacher output for input $x$
+- The expectation is computed over the current batch
+
+**How it prevents collapse**:
+
+- The center tracks the mean teacher output across all recent batches
+- Subtracting the center ensures teacher outputs are zero-mean
+- If the model tries to collapse (all outputs identical), the center would equal that output, making centered outputs all zero
+- Zero centered outputs lead to uniform softmax, which is a high-loss state
+- This creates a self-correcting mechanism that pushes the model away from collapse
+
+**EMA update benefits**:
+- Smooth updates prevent oscillation
+- Batch-to-batch variations are dampened
+- The center represents a stable "average behavior" rather than reacting to individual batches
+
+### View Asymmetry
 
 The key asymmetry in DINO:
 
-- **Teacher**: Only sees **global views** (2 large crops)
-- **Student**: Sees **all views** (2 global + 6 local crops)
+- **Teacher**: Only sees **global views** (2 large 224×224 crops covering 40-100% of image)
+- **Student**: Sees **all views** (2 global + 6 local 96×96 crops covering 5-40% of image)
 
-This forces the student to learn features that work across scales and augmentations.
+```
+Teacher sees:        Student sees:
+┌─────────────┐     ┌─────────────┐
+│ ┌─────────┐ │     │ ┌─────────┐ │
+│ │ Global  │ │     │ │ Global  │ │  + 6 local crops:
+│ │  View   │ │     │ │  View   │ │  ┌───┐ ┌───┐ ┌───┐
+│ └─────────┘ │     │ └─────────┘ │  │   │ │   │ │   │
+└─────────────┘     └─────────────┘  └───┘ └───┘ └───┘
+    (×2)                (×2)            (×6)
+```
+
+**Why this asymmetry matters**:
+
+1. **Local-to-global correspondence**: The student must predict teacher's global view output from local crops. This forces the student to learn that small patches belong to the same semantic object as the full image.
+
+2. **Multi-scale reasoning**: The student learns features that are consistent across different scales (5% to 100% of the image).
+
+3. **Information bottleneck**: The teacher has more context (sees large regions), creating an information asymmetry. The student must extract more meaning from less context.
+
+4. **Cross-view loss computation**: Each teacher view (2 total) is compared against each student view (8 total), excluding same-index pairs. This creates 2×8 - 2 = 14 loss terms per sample.
 
 ---
 
