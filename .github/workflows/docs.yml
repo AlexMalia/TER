@@ -11,10 +11,16 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -36,28 +42,25 @@ jobs:
         working-directory: DinoImpl
         run: mkdocs build
 
-      - name: Deploy to gh-pages
+      - name: Prepare deployment
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p _site/DinoImpl
+          cp -r DinoImpl/site/* _site/DinoImpl/
+          cp index.html _site/
+          touch _site/.nojekyll
 
-          # Create temp directory for deployment
-          mkdir -p /tmp/gh-pages
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
 
-          # Copy built docs to DinoImpl subfolder
-          mkdir -p /tmp/gh-pages/DinoImpl
-          cp -r DinoImpl/site/* /tmp/gh-pages/DinoImpl/
-
-          # Copy root redirect
-          cp index.html /tmp/gh-pages/
-
-          # Add .nojekyll
-          touch /tmp/gh-pages/.nojekyll
-
-          # Deploy to gh-pages (use /. to include dotfiles)
-          git checkout --orphan gh-pages-new
-          git rm -rf .
-          cp -r /tmp/gh-pages/. .
-          git add -A
-          git commit -m "Deploy documentation"
-          git push origin gh-pages-new:gh-pages --force
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
