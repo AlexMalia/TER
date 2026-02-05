@@ -315,12 +315,87 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 ---
 
+## Known Issues
+
+### Negative Loss Values (Historical Bug - FIXED)
+
+**Symptom**: Loss values are negative and increasing in magnitude
+
+**Root cause**: The original notebook implementation had a bug where it iterated over raw output tensors instead of chunked probability distributions.
+
+**Wrong (original)**:
+```python
+for i, teacher_output in enumerate(teacher_outputs):  # Raw tensors!
+    for j, student_output in enumerate(student_outputs):
+        loss = -torch.sum(teacher_output * student_output)
+```
+
+**Correct (fixed)**:
+```python
+# Chunk outputs into views first
+student_views = student_log_probs.chunk(ncrops)
+teacher_views = teacher_probs.chunk(n_global_crops)
+
+for i, teacher_prob in enumerate(teacher_views):  # Chunked distributions
+    for j, student_log_prob in enumerate(student_views):
+        loss = -torch.sum(teacher_prob * student_log_prob)
+```
+
+This implementation includes the fix - loss values should always be positive. If you see negative loss, verify you're using the correct `DinoLoss` class from this codebase.
+
+---
+
+### YAML Tuple Serialization
+
+**Symptom**: Tuples in config become lists after saving and loading YAML
+
+**Example**:
+```python
+# Before save: normalize_mean is tuple (0.485, 0.456, 0.406)
+config.save_yaml('config.yaml')
+config2 = DinoConfig.from_yaml('config.yaml')
+# After load: normalize_mean is list [0.485, 0.456, 0.406]
+```
+
+**Why this happens**: YAML has no native tuple type. All sequences are represented as lists.
+
+**Workaround**: This is handled internally. The dataclass accepts both tuples and lists for sequence fields. If you need a tuple specifically, convert after loading:
+
+```python
+mean = tuple(config.augmentation.normalize_mean)
+```
+
+---
+
+### Checkpoint Compatibility
+
+**Issue**: Checkpoints from different code versions may not load
+
+**Symptoms**:
+- `KeyError` when loading checkpoint
+- Shape mismatch errors
+- Missing keys in state dict
+
+**Cause**: The codebase was significantly refactored. Old checkpoints from the notebook version use different key names and structures.
+
+**Solution**: Retrain from scratch rather than trying to maintain backward compatibility. The code is designed for forward compatibility - checkpoints saved with this version will continue to work.
+
+**If you must use old checkpoints**:
+```python
+# Load with strict=False (may lose some weights)
+checkpoint = torch.load('old_checkpoint.pth')
+model.load_state_dict(checkpoint['state_dict'], strict=False)
+# Warning: Some weights may be missing or mismatched
+```
+
+---
+
 ## Getting Help
 
 If your issue isn't listed here:
 
 1. **Check the logs**: Look for error messages in `./logs/`
-2. **Enable debug mode**: Set `log_level: DEBUG` in config
+2. **Enable debug mode**: Set `log_verbosity: debug` in config
 3. **Minimal reproduction**: Create a minimal example that reproduces the issue
 4. **Open an issue**: Include error message, config, and environment info
 
