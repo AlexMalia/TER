@@ -1,0 +1,19 @@
+{
+  "id": "alexdelaveau/dino-training",
+  "title": "DINO Training",
+  "code_file": "train_kaggle.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": [
+    "alexdelaveau/dino-code",
+    "alexdelaveau/dino-checkpoints",
+    "frgfm/imagenette",
+    "ambityga/imagenet100"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}

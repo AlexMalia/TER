@@ -74,3 +74,5 @@ logging:
   log_dir: ./outputs/logs
   log_every_n_iters: 10
   log_verbosity: debug
+  use_wandb: true
+  wandb_project: "dino-test"

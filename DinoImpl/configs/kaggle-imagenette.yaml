@@ -1,8 +1,11 @@
+# Kaggle-tuned config for DINO ViT-S/16 on ImageNette
+# Use with: CONFIG_FILE = "kaggle-imagenette.yaml" in train_kaggle.py
+
 data:
   dataset: imagenette
-  data_path: ./dataset
+  data_path: /kaggle/working/data
   batch_size: 32
-  num_workers: 4
+  num_workers: 2
   pin_memory: true
   train_split: 0.85
   val_split: 0.15
@@ -27,7 +30,7 @@ augmentation:
   gaussian_blur_sigma_max: 2.0
   solarization_prob: 0.2
   solarization_threshold: 128
-  normalize_mean: [0.485, 0.456, 0.406]  # ImageNet normalization
+  normalize_mean: [0.485, 0.456, 0.406]
   normalize_std: [0.229, 0.224, 0.225]
 
 model:
@@ -51,7 +54,7 @@ optimizer:
   eps: 1.0e-08
 
 scheduler:
-  scheduler: cosine
+  scheduler: cosine_warmup
   warmup_epochs: 10
   min_lr: 1.0e-06
 
@@ -61,20 +64,20 @@ training:
   teacher_momentum_schedule: true
   teacher_momentum_final: 1.0
   gradient_clip: 3.0
-  gradient_accumulation_steps: 8
+  gradient_accumulation_steps: 2
   seed: 42
   device: cuda
 
 checkpoint:
-  checkpoint_dir: ./checkpoints/imagenette/vits16
-  save_every_n_epochs: 1
+  checkpoint_dir: /kaggle/working/checkpoints
+  save_every_n_epochs: 10
   save_best: true
   resume_from: null
 
 logging:
-  log_dir: ./logs/imagenette/vits16
+  log_dir: /kaggle/working/logs
   log_every_n_iters: 50
   log_verbosity: debug
   use_wandb: true
-  wandb_project: "dino-test"
-  wandb_run_name: "imagenette_vits16_test_run"
+  wandb_project: dino-training
+  wandb_run_name: "kaggle_imagenette_run"
