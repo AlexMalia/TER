@@ -212,6 +212,44 @@ def main():
             logger.info(f"Found checkpoint: {latest_checkpoint}")
             trainer.resume_from_checkpoint(str(latest_checkpoint))
 
+    # --- wandb setup ---
+    if config.logging.use_wandb:
+        try:
+            import wandb
+
+            # If resuming, try to get the wandb run ID from checkpoint
+            wandb_run_id = getattr(trainer, 'resumed_wandb_run_id', None)
+            if wandb_run_id is None:
+                wandb_run_id = wandb.util.generate_id()
+
+            wandb.init(
+                project=config.logging.wandb_project or "dino-training",
+                entity=config.logging.wandb_entity,
+                name=config.logging.wandb_run_name,
+                id=wandb_run_id,
+                resume="allow",
+                config=config.to_dict(),
+                save_code=True,
+                tags=[config.model.backbone, config.data.dataset],
+            )
+
+            # Define metric axes so iteration and epoch charts are separate
+            wandb.define_metric("iteration")
+            wandb.define_metric("epoch")
+            wandb.define_metric("train/*", step_metric="iteration")
+            wandb.define_metric("epoch/*", step_metric="epoch")
+
+            # Log computed values not in the static config
+            wandb.config.update({
+                "total_steps": total_steps,
+                "warmup_steps": warmup_steps,
+                "param_count": param_count['total'],
+            }, allow_val_change=True)
+
+        except ImportError:
+            logger.warning("wandb not installed. pip install wandb to enable.")
+            config.logging.use_wandb = False
+
     # Train
     logger.info("=" * 80)
     logger.info("Starting training...")
@@ -224,6 +262,13 @@ def main():
     except Exception as e:
         logger.error(f"Training failed with error: {e}", exc_info=True)
         raise
+    finally:
+        if config.logging.use_wandb:
+            try:
+                import wandb
+                wandb.finish()
+            except Exception:
+                pass
 
     logger.info("=" * 80)
     logger.info("Training completed successfully!")

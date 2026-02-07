@@ -12,6 +12,11 @@ from ..utils.checkpoint import save_checkpoint, load_checkpoint
 from ..utils.logging_utils import log_metrics
 from ..utils.history import History
 
+try:
+    import wandb
+except ImportError:
+    wandb = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -212,6 +217,15 @@ class DinoTrainer:
                 )
                 self.current_iteration += 1
 
+                # wandb iteration-level logging
+                if wandb is not None and wandb.run is not None:
+                    wandb.log({
+                        "iteration": self.current_iteration,
+                        "train/loss": loss.item(),
+                        "train/lr": current_lr,
+                        "train/momentum": momentum,
+                    })
+
             # Update progress bar
             if self.momentum_schedule is not None:
                 momentum = self.momentum_schedule[min(self.current_iteration, len(self.momentum_schedule) - 1)]
@@ -305,8 +319,21 @@ class DinoTrainer:
             # Log metrics
             log_metrics(metrics, epoch, prefix="Train")
 
+            # wandb epoch-level logging
+            if wandb is not None and wandb.run is not None:
+                wandb.log({
+                    "epoch": epoch,
+                    "epoch/avg_loss": metrics['loss'],
+                    "epoch/lr": metrics['learning_rate'],
+                    "epoch/momentum": metrics['momentum'],
+                })
+
             # Save checkpoint
             if epoch % self.config.checkpoint.save_every_n_epochs == 0:
+                wandb_run_id = None
+                if wandb is not None and wandb.run is not None:
+                    wandb_run_id = wandb.run.id
+
                 save_checkpoint(
                     student=self.student,
                     teacher=self.teacher,
@@ -317,7 +344,9 @@ class DinoTrainer:
                     config=self.config,
                     metrics=metrics,
                     checkpoint_dir=self.config.checkpoint.checkpoint_dir,
-                    history=self.history
+                    history=self.history,
+                    wandb_run_id=wandb_run_id,
+                    scheduler=self.scheduler
                 )
 
             self.current_epoch = epoch
@@ -338,7 +367,8 @@ class DinoTrainer:
             teacher=self.teacher,
             optimizer=self.optimizer,
             dino_loss=self.loss_fn,
-            device=self.device
+            device=self.device,
+            scheduler=self.scheduler
         )
 
         self.current_epoch = checkpoint_info['epoch']
@@ -347,5 +377,8 @@ class DinoTrainer:
         # Restore history if available
         if checkpoint_info.get('history') is not None:
             self.history = checkpoint_info['history']
+
+        # Expose wandb_run_id for callers to use during wandb.init
+        self.resumed_wandb_run_id = checkpoint_info.get('wandb_run_id')
 
         logger.info(f"Resumed from epoch {self.current_epoch}, iteration {self.current_iteration}")

@@ -39,6 +39,7 @@ dependencies = [
     "transformers>=4.46.3",
     "kaggle>=1.7.4.5",
     "datasets>=2.14.0",
+    "wandb>=0.23.1",
 ]
 
 [project.optional-dependencies]
