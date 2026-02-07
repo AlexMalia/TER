@@ -24,7 +24,9 @@ def save_checkpoint(
     checkpoint_dir: str = './checkpoints',
     filename: Optional[str] = None,
     is_best: bool = False,
-    history: Optional['History'] = None
+    history: Optional['History'] = None,
+    wandb_run_id: Optional[str] = None,
+    scheduler: Optional[Any] = None
 ) -> Path:
     """
     Save a complete checkpoint of the DINO training state.
@@ -67,6 +69,8 @@ def save_checkpoint(
         'metrics': metrics or {},
         'timestamp': datetime.now().isoformat(),
         'has_history': history is not None,
+        'wandb_run_id': wandb_run_id,
+        'scheduler_state_dict': scheduler.state_dict() if scheduler is not None else None,
     }
 
     # Save checkpoint
@@ -102,7 +106,8 @@ def load_checkpoint(
     teacher: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
     dino_loss: torch.nn.Module,
-    device: str = 'cpu'
+    device: str = 'cpu',
+    scheduler: Optional[Any] = None
 ) -> Dict[str, Any]:
     """
     Load checkpoint and restore training state.
@@ -134,6 +139,11 @@ def load_checkpoint(
     # Restore loss center (ensure it's on the correct device)
     dino_loss.center = checkpoint['dino_loss_center'].to(device)
 
+    # Restore scheduler state if available
+    if scheduler is not None and checkpoint.get('scheduler_state_dict') is not None:
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        logger.info("Scheduler state restored from checkpoint")
+
     # Get training info
     epoch = checkpoint['epoch']
     iteration = checkpoint.get('iteration', 0)
@@ -164,7 +174,8 @@ def load_checkpoint(
         'metrics': metrics,
         'config': checkpoint.get('config'),
         'timestamp': checkpoint.get('timestamp'),
-        'history': history
+        'history': history,
+        'wandb_run_id': checkpoint.get('wandb_run_id'),
     }
 
 

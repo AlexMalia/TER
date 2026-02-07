@@ -134,6 +134,10 @@ class LoggingConfig:
     log_dir: str = "./logs"
     log_every_n_iters: int = 10
     log_verbosity: str = "info"
+    use_wandb: bool = False
+    wandb_project: Optional[str] = None
+    wandb_entity: Optional[str] = None
+    wandb_run_name: Optional[str] = None
 
 
 _CONFIG_CLASSES = {
