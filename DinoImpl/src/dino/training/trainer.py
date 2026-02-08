@@ -368,11 +368,19 @@ class DinoTrainer:
             optimizer=self.optimizer,
             dino_loss=self.loss_fn,
             device=self.device,
-            scheduler=self.scheduler
         )
 
         self.current_epoch = checkpoint_info['epoch']
         self.current_iteration = checkpoint_info['iteration']
+
+        # Fast-forward scheduler to the correct step instead of loading state_dict.
+        # This avoids SequentialLR.load_state_dict() bugs that corrupt the LR on resume.
+        if self.scheduler is not None and self.current_iteration > 0:
+            logger.info(f"Fast-forwarding scheduler to iteration {self.current_iteration}...")
+            for _ in range(self.current_iteration):
+                self.scheduler.step()
+            lr = self.optimizer.param_groups[0]['lr']
+            logger.info(f"Scheduler fast-forwarded, current LR: {lr:.6f}")
 
         # Restore history if available
         if checkpoint_info.get('history') is not None:
