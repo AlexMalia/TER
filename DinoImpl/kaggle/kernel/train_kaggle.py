@@ -85,7 +85,7 @@ def install_dependencies():
         sys.executable, "-m", "pip", "install", "-q",
         "torch", "torchvision", "numpy", "pyyaml", "tqdm",
         "tensorboard", "scikit-learn", "matplotlib", "pillow",
-        "transformers>=4.46.3", "wandb"
+        "transformers>=4.46.3", "wandb>=0.23.1"
     ], check=True)
 
     print("Dependencies installed.")
@@ -266,19 +266,19 @@ def run_training(device: str):
         try:
             import wandb
 
-            # Try Kaggle Secrets first
-            try:
-                from kaggle_secrets import UserSecretsClient
-                api_key = UserSecretsClient().get_secret("WANDB_API_KEY")
-                wandb.login(key=api_key)
-            except Exception as e:
-                logger.warning(f"Could not get WANDB_API_KEY from Kaggle Secrets: {e}")
+            # Read API key from code dataset (bundled by kaggle_manager.sh)
+            api_key = None
+            key_file = Path("/kaggle/input/dino-code/.wandb_key")
+            if key_file.exists():
+                api_key = key_file.read_text().strip()
+                logger.info("Found WANDB_API_KEY from code dataset")
+            if not api_key:
                 api_key = os.environ.get("WANDB_API_KEY")
-                if api_key:
-                    wandb.login(key=api_key)
-                else:
-                    logger.warning("No wandb API key found, running in offline mode")
-                    os.environ["WANDB_MODE"] = "offline"
+            if api_key:
+                wandb.login(key=api_key)
+            else:
+                logger.warning("No wandb API key found, running in offline mode")
+                os.environ["WANDB_MODE"] = "offline"
 
             # If resuming, reuse the wandb run ID from the checkpoint
             wandb_run_id = getattr(trainer, 'resumed_wandb_run_id', None)
