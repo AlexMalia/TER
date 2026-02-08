@@ -68,6 +68,22 @@ __pycache__/
 .DS_Store
 EOF
     
+    # Bundle WANDB_API_KEY into the code dataset
+    local wandb_key="${WANDB_API_KEY:-}"
+    if [ -z "$wandb_key" ]; then
+        # Try parsing from ~/.netrc (where `wandb login` stores it)
+        if [ -f ~/.netrc ]; then
+            wandb_key=$(awk '/machine api.wandb.ai/{found=1} found && /password/{print $2; exit}' ~/.netrc)
+        fi
+    fi
+
+    if [ -n "$wandb_key" ]; then
+        echo "$wandb_key" > "$CODE_DATASET_DIR/.wandb_key"
+        echo "WANDB_API_KEY written to code dataset (.wandb_key)"
+    else
+        echo "WARNING: No WANDB_API_KEY found (env var or ~/.netrc). wandb will run in offline mode."
+    fi
+
     echo "Code dataset prepared at: $CODE_DATASET_DIR"
 }
 

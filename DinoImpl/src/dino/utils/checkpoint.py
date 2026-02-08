@@ -107,10 +107,14 @@ def load_checkpoint(
     optimizer: torch.optim.Optimizer,
     dino_loss: torch.nn.Module,
     device: str = 'cpu',
-    scheduler: Optional[Any] = None
 ) -> Dict[str, Any]:
     """
     Load checkpoint and restore training state.
+
+    Scheduler state is NOT restored here. The caller should fast-forward
+    the scheduler by stepping it `iteration` times after this call.
+    This avoids fragile SequentialLR.load_state_dict() interactions that
+    can corrupt the learning rate on resume.
 
     Args:
         checkpoint_path: Path to checkpoint file
@@ -138,11 +142,6 @@ def load_checkpoint(
 
     # Restore loss center (ensure it's on the correct device)
     dino_loss.center = checkpoint['dino_loss_center'].to(device)
-
-    # Restore scheduler state if available
-    if scheduler is not None and checkpoint.get('scheduler_state_dict') is not None:
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        logger.info("Scheduler state restored from checkpoint")
 
     # Get training info
     epoch = checkpoint['epoch']
