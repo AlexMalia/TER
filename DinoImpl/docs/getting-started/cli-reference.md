@@ -21,6 +21,8 @@ python scripts/train.py [OPTIONS]
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
+| `--dataset` | str | imagenette | Dataset name (imagenette, imagenet100) |
+| `--data-path` | path | ./data | Path to data directory |
 | `--batch-size` | int | 32 | Batch size for training |
 | `--num-workers` | int | 4 | Number of data loading workers |
 
@@ -30,13 +32,23 @@ python scripts/train.py [OPTIONS]
 |--------|------|---------|-------------|
 | `--epochs` | int | 100 | Number of training epochs |
 | `--lr` | float | 0.001 | Learning rate |
-| `--weight-decay` | float | 0.04 | Weight decay for optimizer |
+| `--seed` | int | 42 | Random seed for reproducibility |
+| `--device` | str | cuda | Device to use (cuda, cpu) |
 
 ### Model Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--backbone` | str | resnet18 | Backbone architecture |
+| `--output-dim` | int | 2048 | Projection output dimension |
+
+### Logging Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--checkpoint-dir` | path | ./checkpoints | Checkpoint directory |
+| `--log-dir` | path | ./logs | Log directory |
+| `--log-verbosity` | str | info | Log level (debug, info, warning, error) |
 
 ---
 

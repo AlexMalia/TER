@@ -25,9 +25,12 @@ checkpoint = {
     'student_state_dict': OrderedDict,   # Student weights
     'teacher_state_dict': OrderedDict,   # Teacher weights
     'optimizer_state_dict': dict,    # Optimizer state
+    'scheduler_state_dict': dict,    # Learning rate scheduler state
     'dino_loss_center': Tensor,      # Loss centering buffer
     'config': dict,                  # Training configuration
     'metrics': dict,                 # Training metrics
+    'history': History,              # Training history (loss, lr, momentum)
+    'wandb_run_id': str,             # W&B run ID for resumption (if enabled)
     'timestamp': str                 # Save time
 }
 ```
@@ -41,6 +44,24 @@ The DINO loss maintains a running center via EMA. This center is critical for:
 - Consistent training resumption
 
 Losing the center would break loss computation when resuming.
+
+### Why Save the Scheduler State?
+
+The learning rate scheduler maintains internal state (current step, etc.). Saving and restoring it ensures:
+
+- Correct learning rate on resume
+- Proper warmup continuation
+- Consistent training dynamics
+
+**Note:** On resume, the scheduler is fast-forwarded to the correct iteration to avoid known issues with `SequentialLR.load_state_dict()`.
+
+### Why Save the W&B Run ID?
+
+If you're using Weights & Biases for experiment tracking, the `wandb_run_id` allows:
+
+- Resuming logging to the same W&B run
+- Continuous experiment history
+- Proper metric aggregation across interruptions
 
 ---
 

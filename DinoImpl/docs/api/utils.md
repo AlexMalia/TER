@@ -93,15 +93,18 @@ for iteration in range(total_iterations):
 from dino.utils import save_checkpoint
 
 save_checkpoint(
-    path='checkpoints/checkpoint_epoch_50.pth',
-    epoch=50,
-    iteration=10000,
     student=student,
     teacher=teacher,
     optimizer=optimizer,
-    loss_fn=loss_fn,
+    dino_loss=loss_fn,
+    epoch=50,
+    iteration=10000,
     config=config,
-    metrics={'loss': 2.5, 'knn_acc': 0.75}
+    metrics={'loss': 2.5},
+    checkpoint_dir='checkpoints',
+    history=history,              # Training history
+    wandb_run_id=wandb.run.id,    # W&B run ID (optional)
+    scheduler=scheduler           # LR scheduler (optional)
 )
 ```
 

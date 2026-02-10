@@ -76,7 +76,9 @@ data:
   batch_size: 32              # Training batch size
   num_workers: 4              # DataLoader workers
   pin_memory: true            # Pin memory for GPU
-  train_split: 0.9            # Train/val split ratio
+  train_split: 0.7            # Training split ratio
+  val_split: 0.15             # Validation split ratio
+  seed: 42                    # Random seed for reproducibility
 ```
 
 ### AugmentationConfig
@@ -84,23 +86,29 @@ data:
 ```yaml
 augmentation:
   # Crop settings
-  n_global_crops: 2           # Number of global crops
-  num_local_views: 6          # Number of local crops
-  global_crop_size: 224       # Global crop size (pixels)
-  local_crop_size: 96         # Local crop size (pixels)
-  global_crop_scale: [0.4, 1.0]   # Scale range for global crops
-  local_crop_scale: [0.05, 0.4]   # Scale range for local crops
+  n_global_crops: 2               # Number of global crops
+  num_local_views: 6              # Number of local crops
+  global_crop_size: 224           # Global crop size (pixels)
+  local_crop_size: 96             # Local crop size (pixels)
+  global_crop_scale_min: 0.4      # Min scale for global crops
+  global_crop_scale_max: 1.0      # Max scale for global crops
+  local_crop_scale_min: 0.05      # Min scale for local crops
+  local_crop_scale_max: 0.4       # Max scale for local crops
 
   # Color augmentation
-  color_jitter_prob: 0.8      # Probability of color jitter
-  brightness: 0.4
-  contrast: 0.4
-  saturation: 0.2
-  hue: 0.1
+  color_jitter_prob: 0.8          # Probability of color jitter
+  color_jitter_brightness: 0.4
+  color_jitter_contrast: 0.4
+  color_jitter_saturation: 0.2
+  color_jitter_hue: 0.1
 
   # Other augmentations
-  gaussian_blur_prob: 0.5     # Probability of Gaussian blur
-  solarization_prob: 0.2      # Probability of solarization
+  horizontal_flip_prob: 0.5       # Probability of horizontal flip
+  grayscale_prob: 0.2             # Probability of grayscale
+  gaussian_blur_sigma_min: 0.1    # Gaussian blur sigma range
+  gaussian_blur_sigma_max: 2.0
+  solarization_prob: 0.2          # Probability of solarization
+  solarization_threshold: 128     # Solarization threshold
 
   # Normalization (ImageNet defaults)
   normalize_mean: [0.485, 0.456, 0.406]
@@ -113,7 +121,7 @@ augmentation:
 model:
   # Backbone
   backbone: resnet18          # resnet18/34/50/101/152, dino_vits8/16, dino_vitb8/16
-  pretrained_backbone: false  # Use pretrained weights
+  backbone_pretrained: false  # Use pretrained weights
 
   # Projection head
   projection_hidden_dim: 1024
@@ -145,10 +153,10 @@ optimizer:
 
 ```yaml
 scheduler:
-  scheduler: cosine_warmup    # Scheduler type
-  warmup_epochs: 10           # Warmup epochs
-  min_lr: 1.0e-6              # Minimum learning rate
-  warmup_start_lr: 0.0        # Starting LR for warmup
+  scheduler: cosine_warmup    # Scheduler type (cosine_warmup)
+  warmup_epochs: 10           # Number of warmup epochs
+  min_lr: 1.0e-6              # Minimum learning rate after decay
+  warmup_start_lr: 0.0        # Starting LR for warmup (ramps up to optimizer.lr)
 ```
 
 ### TrainingConfig
@@ -160,16 +168,22 @@ training:
   teacher_momentum_final: 1.0 # Final momentum (if scheduled)
   teacher_momentum_schedule: true # Use momentum scheduling
   gradient_clip: 3.0          # Gradient clipping (null to disable)
+  gradient_accumulation_steps: 1  # Accumulate gradients for larger effective batch
+  mixed_precision: false      # Use mixed precision training (experimental)
+  seed: 42                    # Random seed
+  device: cuda                # Device to use (cuda, cpu)
 ```
 
 ### CheckpointConfig
 
 ```yaml
 checkpoint:
-  save_dir: ./checkpoints     # Checkpoint directory
-  save_freq: 10               # Save every N epochs
-  save_latest: true           # Keep latest checkpoint
-  save_best: true             # Keep best checkpoint
+  checkpoint_dir: ./checkpoints   # Checkpoint directory
+  save_every_n_epochs: 1          # Save every N epochs
+  save_every_n_iters: null        # Save every N iterations (optional)
+  keep_last_n: 5                  # Number of checkpoints to keep
+  save_best: true                 # Keep best checkpoint
+  resume_from: null               # Path to checkpoint to resume from
 ```
 
 ### LoggingConfig
@@ -177,9 +191,14 @@ checkpoint:
 ```yaml
 logging:
   log_dir: ./logs             # Log directory
-  log_freq: 100               # Log every N iterations
-  use_tensorboard: true       # Enable TensorBoard
-  log_level: INFO             # Logging level
+  log_every_n_iters: 10       # Log every N iterations
+  log_verbosity: info         # Logging level (debug, info, warning, error)
+
+  # Weights & Biases integration
+  use_wandb: false            # Enable W&B experiment tracking
+  wandb_project: null         # W&B project name
+  wandb_entity: null          # W&B entity (username or team)
+  wandb_run_name: null        # Custom run name (optional)
 ```
 
 ---
@@ -194,6 +213,9 @@ data:
   batch_size: 64
   num_workers: 8
   pin_memory: true
+  train_split: 0.85
+  val_split: 0.15
+  seed: 42
 
 augmentation:
   n_global_crops: 2
@@ -203,7 +225,7 @@ augmentation:
 
 model:
   backbone: resnet50
-  pretrained_backbone: false
+  backbone_pretrained: false
   projection_output_dim: 2048
 
 loss:
@@ -224,16 +246,51 @@ scheduler:
 training:
   num_epochs: 200
   teacher_momentum: 0.996
+  teacher_momentum_schedule: true
+  teacher_momentum_final: 1.0
   gradient_clip: 3.0
+  gradient_accumulation_steps: 1
+  seed: 42
 
 checkpoint:
-  save_dir: ./checkpoints
-  save_freq: 10
+  checkpoint_dir: ./checkpoints
+  save_every_n_epochs: 10
+  save_best: true
 
 logging:
   log_dir: ./logs
-  use_tensorboard: true
+  log_every_n_iters: 50
+  log_verbosity: info
+  use_wandb: false
 ```
+
+---
+
+## Kaggle Configuration
+
+For training on Kaggle, use the specialized configuration files:
+
+```yaml
+# configs/kaggle-imagenet100.yaml
+data:
+  dataset: imagenet100
+  data_path: /kaggle/input/imagenet100
+  batch_size: 32
+  num_workers: 2
+
+training:
+  gradient_accumulation_steps: 2  # Simulate larger batch size
+
+checkpoint:
+  checkpoint_dir: /kaggle/working/checkpoints
+
+logging:
+  log_dir: /kaggle/working/logs
+  use_wandb: true
+  wandb_project: dino-training
+```
+
+See [Kaggle Training](#kaggle-training) for more details.
 
 ---
 

@@ -81,13 +81,20 @@ teacher.load_state_dict(student.state_dict())
 loss_fn = DinoLoss.from_config(config.loss, config.augmentation, out_dim=student.output_dim)
 optimizer = create_optimizer(student.parameters(), config.optimizer)
 
+# Create scheduler (accounts for gradient accumulation)
+accumulation_steps = config.training.gradient_accumulation_steps
+updates_per_epoch = len(train_loader) // accumulation_steps
+total_steps = config.training.num_epochs * updates_per_epoch
+warmup_steps = config.scheduler.warmup_epochs * updates_per_epoch
+scheduler = create_scheduler(optimizer, config.scheduler, config.optimizer, total_steps, warmup_steps)
+
 # Train
 trainer = DinoTrainer(
     config=config,
     student=student,
     teacher=teacher,
     optimizer=optimizer,
-    scheduler=None,
+    scheduler=scheduler,
     loss_fn=loss_fn,
     train_loader=train_loader
 )
@@ -117,6 +124,26 @@ student = DinoModel(backbone, projection)
 [INFO] Epoch 1/100
 Epoch 1/100: 100%|████████| 208/208 [02:15<00:00]  loss: 8.2341, momentum: 0.9960
 [INFO] Train Epoch 1 - loss: 8.2145, momentum: 0.9960
+```
+
+### Weights & Biases
+
+Enable W&B for rich experiment tracking:
+
+```bash
+# First, login to W&B
+wandb login
+
+# Train with W&B enabled
+python scripts/train.py --config configs/default.yaml
+```
+
+Or set in your config:
+
+```yaml
+logging:
+  use_wandb: true
+  wandb_project: dino-training
 ```
 
 ### TensorBoard
