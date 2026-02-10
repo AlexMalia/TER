@@ -390,6 +390,80 @@ model.load_state_dict(checkpoint['state_dict'], strict=False)
 
 ---
 
+## Weights & Biases Issues
+
+### W&B Login Required
+
+**Error**: `wandb: ERROR You must be logged in to use wandb`
+
+**Solution**:
+```bash
+wandb login
+# Enter your API key from https://wandb.ai/authorize
+```
+
+### W&B Run Not Resuming
+
+**Symptom**: New run created instead of resuming
+
+**Solution**: Ensure checkpoint contains `wandb_run_id`:
+```python
+checkpoint = torch.load('checkpoint.pth')
+print(checkpoint.get('wandb_run_id'))  # Should not be None
+```
+
+If resuming manually:
+```python
+wandb.init(
+    id=checkpoint['wandb_run_id'],
+    resume="must"
+)
+```
+
+---
+
+## Kaggle-Specific Issues
+
+### Cannot Access Dataset
+
+**Error**: Dataset not found at `/kaggle/input/`
+
+**Solutions**:
+
+1. **Check dataset is attached**: In Kaggle notebook, go to "Add Data" and attach the dataset
+2. **Verify path**: Use the correct Kaggle input path
+   ```python
+   import os
+   print(os.listdir('/kaggle/input/'))
+   ```
+
+### Output Quota Exceeded
+
+**Error**: `OSError: [Errno 28] No space left on device`
+
+**Solution**: Save checkpoints less frequently:
+```yaml
+checkpoint:
+  save_every_n_epochs: 20  # Instead of every epoch
+```
+
+### W&B on Kaggle
+
+**Setup**:
+```python
+import wandb
+from kaggle_secrets import UserSecretsClient
+
+# Get secret from Kaggle
+secrets = UserSecretsClient()
+wandb_api_key = secrets.get_secret("wandb_api_key")
+
+# Login
+wandb.login(key=wandb_api_key)
+```
+
+---
+
 ## Getting Help
 
 If your issue isn't listed here:

@@ -72,8 +72,12 @@ loss_fn = DinoLoss.from_config(
 # Create optimizer and scheduler
 optimizer = create_optimizer(student.parameters(), config.optimizer)
 
-total_steps = config.training.num_epochs * len(train_loader)
-warmup_steps = config.scheduler.warmup_epochs * len(train_loader)
+# Calculate steps accounting for gradient accumulation
+accumulation_steps = config.training.gradient_accumulation_steps
+updates_per_epoch = len(train_loader) // accumulation_steps
+total_steps = config.training.num_epochs * updates_per_epoch
+warmup_steps = config.scheduler.warmup_epochs * updates_per_epoch
+
 scheduler = create_scheduler(
     optimizer,
     config.scheduler,
@@ -141,8 +145,9 @@ training:
   num_epochs: 100
   teacher_momentum: 0.996
   teacher_momentum_final: 1.0
-  use_momentum_schedule: true
+  teacher_momentum_schedule: true
   gradient_clip: 3.0
+  gradient_accumulation_steps: 1
 
 optimizer:
   optimizer: adamw

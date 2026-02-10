@@ -333,21 +333,99 @@ for i, batch in enumerate(dataloader):
 
 ---
 
-## Streaming Dataset Support
+## Weights & Biases Integration
 
-For very large datasets that don't fit in memory, streaming mode loads data on-the-fly:
+Track experiments with [Weights & Biases](https://wandb.ai):
+
+### Configuration
+
+```yaml
+logging:
+  use_wandb: true
+  wandb_project: dino-training
+  wandb_entity: your-username    # Optional: W&B username or team
+  wandb_run_name: experiment-1   # Optional: custom run name
+```
+
+### What Gets Logged
+
+- **Iteration metrics**: Loss, learning rate, momentum (per step)
+- **Epoch metrics**: Average loss, learning rate, momentum (per epoch)
+- **Configuration**: Full training config saved as W&B config
+- **Tags**: Backbone type, dataset name
+
+### Resuming with W&B
+
+When resuming from a checkpoint, the W&B run ID is automatically restored:
+
+```python
+# Checkpoint includes wandb_run_id
+# On resume, training continues logging to the same W&B run
+trainer.resume_from_checkpoint('checkpoint.pth')
+```
+
+### Manual Setup
+
+```python
+import wandb
+
+wandb.init(
+    project="dino-training",
+    config=config.to_dict(),
+    tags=[config.model.backbone, config.data.dataset]
+)
+
+# During training, metrics are logged automatically by DinoTrainer
+```
+
+---
+
+## Kaggle Training
+
+Train DINO models on Kaggle with GPU acceleration.
+
+### Available Configurations
+
+| Config | Dataset | Backbone | Notes |
+|--------|---------|----------|-------|
+| `kaggle-imagenette.yaml` | ImageNette | ViT-S/16 | Quick experiments |
+| `kaggle-imagenet100.yaml` | ImageNet100 | ViT-S/16 | Full training |
+
+### Using Kaggle Configurations
+
+```bash
+# Download from Kaggle
+kaggle kernels output your-username/dino-training -p ./
+
+# Or use the kaggle_manager.sh script
+./kaggle/kaggle_manager.sh push
+```
+
+### Key Differences for Kaggle
+
+1. **Data paths**: Use `/kaggle/input/` for datasets
+2. **Output paths**: Use `/kaggle/working/` for checkpoints and logs
+3. **Workers**: Reduced to 2 (Kaggle container limits)
+4. **Gradient accumulation**: Enabled to simulate larger batches
+
+### Example Kaggle Config
 
 ```yaml
 data:
-  streaming: true  # Enable streaming mode
+  dataset: imagenet100
+  data_path: /kaggle/input/imagenet100
+  num_workers: 2
+
+training:
+  gradient_accumulation_steps: 2
+
+checkpoint:
+  checkpoint_dir: /kaggle/working/checkpoints
+
+logging:
+  use_wandb: true
+  wandb_project: dino-training
 ```
-
-When `streaming: true` is set, the data pipeline automatically:
-- Uses HuggingFace's streaming dataset API
-- Loads data incrementally rather than all at once
-- Supports datasets larger than available RAM
-
-**Note**: Streaming mode may have slightly higher I/O overhead but enables training on arbitrarily large datasets.
 
 ---
 
