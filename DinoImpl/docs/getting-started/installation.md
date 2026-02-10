@@ -64,10 +64,22 @@ uv pip install -e ".[dev]"
 
 ### Weights & Biases
 
-For experiment tracking with W&B:
+W&B is included in the base installation. To use it:
 
 ```bash
-pip install -e ".[wandb]"
+# Login to W&B (required once)
+wandb login
+
+# Enable in config
+logging:
+  use_wandb: true
+  wandb_project: dino-training
+```
+
+Or install separately:
+
+```bash
+pip install wandb
 ```
 
 ### Jupyter Notebooks

@@ -49,6 +49,9 @@ That's it! Your model will train and save checkpoints to `./checkpoints/`.
 - **Extensible**: Easy to add new datasets or backbones
 - **Multiple datasets**: ImageNette and ImageNet100 included
 - **Training history**: Track and visualize loss, learning rate, and momentum
+- **W&B integration**: Experiment tracking with Weights & Biases
+- **Kaggle support**: Ready-to-use configurations for Kaggle training
+- **Gradient accumulation**: Train with larger effective batch sizes
 
 ---
 

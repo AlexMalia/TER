@@ -1151,6 +1151,55 @@ normalize_mean: Tuple[float, float, float] = (0.485, 0.456, 0.406)
 
 ---
 
+## Advanced Features
+
+### Weights & Biases Integration
+
+The training pipeline integrates with [Weights & Biases](https://wandb.ai) for experiment tracking:
+
+```yaml
+logging:
+  use_wandb: true
+  wandb_project: dino-training
+  wandb_entity: your-username
+  wandb_run_name: experiment-1
+```
+
+**Features**:
+- Automatic logging of iteration and epoch metrics
+- Configuration saved as W&B config
+- Resume support: `wandb_run_id` is saved in checkpoints
+- Tags for backbone and dataset
+
+### Gradient Accumulation
+
+For training with limited GPU memory while simulating larger batch sizes:
+
+```yaml
+training:
+  gradient_accumulation_steps: 4  # Effective batch = batch_size × 4
+```
+
+**Implementation details**:
+- Loss is divided by `accumulation_steps` before backward pass
+- Optimizer step only occurs every N mini-batches
+- Scheduler steps are counted as optimizer updates, not forward passes
+- EMA update happens after each optimizer step
+
+### Kaggle Training Support
+
+Ready-to-use configurations for Kaggle GPU notebooks:
+
+- `configs/kaggle-imagenette.yaml`: Quick experiments on ImageNette
+- `configs/kaggle-imagenet100.yaml`: Full training on ImageNet100
+
+**Key adaptations**:
+- Data paths point to `/kaggle/input/` and `/kaggle/working/`
+- Reduced workers (2) for Kaggle container limits
+- W&B integration with Kaggle secrets support
+
+---
+
 ## Testing Strategy
 
 ### Unit Tests (TODO)
