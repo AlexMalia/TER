@@ -41,6 +41,8 @@ class DinoBackbone(BackboneBase):
         self.output_dim = self.model.config.hidden_size
         self.variant = variant
 
+        # TODO si timm, mettre num_class self.model.config.hidden_size à verifier
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through the backbone.

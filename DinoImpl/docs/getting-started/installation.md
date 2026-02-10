@@ -47,9 +47,7 @@ pip install -e .
 To build the documentation locally:
 
 ```bash
-pip install -e ".[docs]"
-# or
-uv pip install -e ".[docs]"
+uv sync --extras docs
 ```
 
 ### Development Tools
@@ -57,9 +55,7 @@ uv pip install -e ".[docs]"
 For linting, testing, and code formatting:
 
 ```bash
-pip install -e ".[dev]"
-# or
-uv pip install -e ".[dev]"
+uv sync --extras dev
 ```
 
 ### Weights & Biases
@@ -79,7 +75,7 @@ logging:
 Or install separately:
 
 ```bash
-pip install wandb
+uv sync --extras wandb
 ```
 
 ### Jupyter Notebooks
@@ -87,7 +83,16 @@ pip install wandb
 For running notebooks:
 
 ```bash
-pip install -e ".[notebooks]"
+uv sync --extras notebooks
+```
+
+
+### Kaggle
+
+To train on Kaggle GPUs
+
+```bash
+uv sync --extras kaggle
 ```
 
 ---
@@ -98,25 +103,11 @@ After installation, verify everything works:
 
 ```bash
 # Check the module is importable
-python -c "from dino import DinoConfig, DinoModel; print('Installation successful!')"
+uv run python -c 'from dino import DinoConfig, DinoModel; print("Installation successful!")'
 
 # Check available commands
-python scripts/train.py --help
+uv run python scripts/train.py --help
 ```
-
----
-
-## GPU Setup
-
-DINO benefits significantly from GPU acceleration. Ensure your PyTorch installation includes CUDA support:
-
-```bash
-# Check CUDA availability
-python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
-python -c "import torch; print(f'CUDA device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"None\"}')"
-```
-
-If CUDA is not available, reinstall PyTorch with CUDA support from [pytorch.org](https://pytorch.org/get-started/locally/).
 
 ---
 
@@ -127,7 +118,7 @@ If CUDA is not available, reinstall PyTorch with CUDA support from [pytorch.org]
 ImageNette downloads automatically when you first run training:
 
 ```bash
-python scripts/train.py
+uv run python scripts/train.py
 # Dataset will be downloaded to ./data/imagenette2/
 ```
 

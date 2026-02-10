@@ -1,23 +1,4 @@
 #!/usr/bin/env python3
-"""
-DINO Training Script
-
-Train a DINO model for self-supervised learning.
-
-Example usage:
-    # Train with default config
-    python scripts/train.py
-
-    # Train with custom config
-    python scripts/train.py --config configs/cifar100.yaml
-
-    # Override specific parameters
-    python scripts/train.py --config configs/imagenette.yaml --batch-size 64 --epochs 200
-
-    # Resume from checkpoint
-    python scripts/train.py --resume checkpoints/checkpoint_latest.pth
-"""
-
 import argparse
 import sys
 from pathlib import Path
@@ -39,8 +20,9 @@ import logging
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Train DINO model",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
+
+    defaults = DinoConfig()
 
     # Configuration
     parser.add_argument(
@@ -57,30 +39,29 @@ def parse_args():
     )
 
     # Override data config
-    parser.add_argument("--dataset", type=str, help="Dataset name")
-    parser.add_argument("--data-path", type=str, help="Path to data")
-    parser.add_argument("--batch-size", type=int, help="Batch size")
-    parser.add_argument("--num-workers", type=int, help="Number of data loading workers")
+    parser.add_argument("--dataset", type=str, help=f"Dataset name (default: {defaults.data.dataset})")
+    parser.add_argument("--data-path", type=str, help=f"Path to data (default: {defaults.data.data_path})")
+    parser.add_argument("--batch-size", type=int, help=f"Batch size (default: {defaults.data.batch_size})")
+    parser.add_argument("--num-workers", type=int, help=f"Number of data loading workers (default: {defaults.data.num_workers})")
 
     # Override model config
-    parser.add_argument("--backbone", type=str, help="Backbone architecture")
-    parser.add_argument("--output-dim", type=int, help="Projection output dimension")
+    parser.add_argument("--backbone", type=str, help=f"Backbone architecture (default: {defaults.model.backbone})")
+    parser.add_argument("--output-dim", type=int, help=f"Projection output dimension (default: {defaults.model.projection_output_dim})")
 
     # Override training config
-    parser.add_argument("--epochs", type=int, help="Number of epochs")
-    parser.add_argument("--lr", type=float, help="Learning rate")
+    parser.add_argument("--epochs", type=int, help=f"Number of epochs (default: {defaults.training.num_epochs})")
+    parser.add_argument("--lr", type=float, help=f"Learning rate (default: {defaults.optimizer.lr})")
 
     # Logging and checkpointing
-    parser.add_argument("--checkpoint-dir", type=str, help="Checkpoint directory")
-    parser.add_argument("--log-dir", type=str, help="Log directory")
-    parser.add_argument("--log-verbosity", type=str, help="Logging verbosity level")
+    parser.add_argument("--checkpoint-dir", type=str, help=f"Checkpoint directory (default: {defaults.checkpoint.checkpoint_dir})")
+    parser.add_argument("--log-dir", type=str, help=f"Log directory (default: {defaults.logging.log_dir})")
+    parser.add_argument("--log-verbosity", type=str, help=f"Logging verbosity level (default: {defaults.logging.log_verbosity})")
 
     # Other
-    parser.add_argument("--seed", type=int, help="Random seed")
-    parser.add_argument("--device", type=str, default="cuda", help="Device to use")
+    parser.add_argument("--seed", type=int, help=f"Random seed (default: {defaults.training.seed})")
+    parser.add_argument("--device", type=str, default="cuda", help="Device to use (default: cuda if available, else cpu)")
 
     return parser.parse_args()
-
 
 def main():
     args = parse_args()
@@ -89,6 +70,7 @@ def main():
     config = DinoConfig.from_yaml(args.config)
 
     # Override config with command-line arguments
+    # TODO : Move this to config class
     if args.dataset:
         config.data.dataset = args.dataset
     if args.batch_size:
