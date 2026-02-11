@@ -326,11 +326,6 @@ checkpoint:
   # Recommended: 1-10 depending on dataset size
   save_every_n_epochs: 1
 
-  # Save checkpoint every N iterations (overrides epoch-based saving if set)
-  # Set to null to use epoch-based saving only
-  # Type: int or null
-  save_every_n_iters: null
-
   # Keep only the last N checkpoints (delete older ones)
   # Set to -1 to keep all checkpoints
   # Type: int

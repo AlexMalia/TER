@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from typing import Optional, Dict, Union
+from typing import Optional, Dict
 import logging
 from tqdm import tqdm
 
@@ -12,6 +12,7 @@ from ..utils.checkpoint import save_checkpoint, load_checkpoint
 from ..utils.logging_utils import log_metrics
 from ..utils.history import History
 
+from ..config.config import DinoConfig
 try:
     import wandb
 except ImportError:
@@ -63,7 +64,7 @@ class DinoTrainer:
 
     def __init__(
         self,
-        config,
+        config: DinoConfig,
         student: nn.Module,
         teacher: nn.Module,
         optimizer: torch.optim.Optimizer,
@@ -83,9 +84,6 @@ class DinoTrainer:
         self.val_loader = val_loader
         self.device = device
 
-        # Check if we're in streaming mode (IterableDataset doesn't have __len__)
-        self.is_streaming = not hasattr(train_loader.dataset, '__len__')
-
         # Training state
         self.current_epoch = 0
         self.current_iteration = 0
@@ -94,26 +92,16 @@ class DinoTrainer:
             'device': device,
         })
 
-        # Determine number of iterations per epoch
-        if self.is_streaming:
-            # For streaming, use config value or estimate based on ImageNet100 size
-            streaming_samples = getattr(config.data, 'streaming_train_samples', None)
-            if streaming_samples:
-                self.niter_per_epoch = streaming_samples // config.data.batch_size
-            else:
-                # Default estimate for ImageNet100: ~117k train samples
-                self.niter_per_epoch = 117000 // config.data.batch_size
-            logger.info(f"Streaming mode: estimated {self.niter_per_epoch} iterations per epoch")
-        else:
-            self.niter_per_epoch = len(train_loader)
+        
+        self.n_iter_per_epoch = len(train_loader)
 
         # EMA momentum schedule
-        if config.training.teacher_momentum_schedule:
+        if config.training_config.teacher_momentum_schedule:
             self.momentum_schedule = get_momentum_schedule(
-                base_momentum=config.training.teacher_momentum,
-                final_momentum=config.training.teacher_momentum_final,
-                num_epochs=config.training.num_epochs,
-                niter_per_epoch=self.niter_per_epoch
+                base_momentum=config.training_config.teacher_momentum,
+                final_momentum=config.training_config.teacher_momentum_final,
+                num_epochs=config.training_config.num_epochs,
+                niter_per_epoch=self.n_iter_per_epoch
             )
         else:
             self.momentum_schedule = None
@@ -139,16 +127,16 @@ class DinoTrainer:
         self.teacher.eval()
 
         epoch_loss = 0.0
-        num_batches = self.niter_per_epoch if self.is_streaming else len(self.train_loader)
+        num_batches = len(self.train_loader)
 
-        accumulation_steps = self.config.training.gradient_accumulation_steps
+        accumulation_steps = self.config.training_config.gradient_accumulation_steps
 
-        # Progress bar (with total if known, otherwise streaming mode)
+        # Progress bar 
         pbar = tqdm(
             self.train_loader,
-            desc=f"Epoch {epoch}/{self.config.training.num_epochs}",
+            desc=f"Epoch {epoch}/{self.config.training_config.num_epochs}",
             leave=True,
-            total=num_batches if not self.is_streaming else None
+            total=num_batches
         )
 
         self.optimizer.zero_grad()
@@ -181,10 +169,10 @@ class DinoTrainer:
 
             if (batch_idx + 1) % accumulation_steps == 0:
                 # Gradient clipping
-                if self.config.training.gradient_clip is not None:
+                if self.config.training_config.gradient_clip is not None:
                     torch.nn.utils.clip_grad_norm_(
                         self.student.parameters(),
-                        self.config.training.gradient_clip
+                        self.config.training_config.gradient_clip
                     )
 
                 # Optimizer step - train student
@@ -201,7 +189,7 @@ class DinoTrainer:
                 if self.momentum_schedule is not None:
                     momentum = self.momentum_schedule[self.current_iteration]
                 else:
-                    momentum = self.config.training.teacher_momentum
+                    momentum = self.config.training_config.teacher_momentum
 
                 update_teacher_EMA(self.student, self.teacher, alpha=momentum)
 
@@ -230,13 +218,13 @@ class DinoTrainer:
             if self.momentum_schedule is not None:
                 momentum = self.momentum_schedule[min(self.current_iteration, len(self.momentum_schedule) - 1)]
             else:
-                momentum = self.config.training.teacher_momentum
+                momentum = self.config.training_config.teacher_momentum
             pbar.set_postfix({'loss': f"{loss.item():.4f}", 'momentum': f"{momentum:.4f}"})
 
 
              # Log periodically
-            if (batch_idx + 1) % self.config.logging.log_every_n_iters == 0:
-                progress_str = f"{batch_idx+1}" if self.is_streaming else f"{batch_idx+1}/{num_batches}"
+            if (batch_idx + 1) % self.config.logging_config.log_every_n_iters == 0:
+                progress_str = f"{batch_idx+1}/{num_batches}"
                 logger.info(
                     f"Epoch {epoch} [{progress_str}] "
                     f"Loss: {loss.item():.4f}, "
@@ -265,10 +253,10 @@ class DinoTrainer:
                         logger.debug(f"  {name}: {grad_norm:.4f}")
 
         if (batch_idx + 1) % accumulation_steps != 0:
-            if self.config.training.gradient_clip is not None:
+            if self.config.training_config.gradient_clip is not None:
                 torch.nn.utils.clip_grad_norm_(
                     self.student.parameters(),
-                    self.config.training.gradient_clip
+                    self.config.training_config.gradient_clip
                 )
 
             self.optimizer.step()
@@ -280,18 +268,18 @@ class DinoTrainer:
             if self.momentum_schedule is not None:
                 momentum = self.momentum_schedule[self.current_iteration]
             else:
-                momentum = self.config.training.teacher_momentum
+                momentum = self.config.training_config.teacher_momentum
 
             update_teacher_EMA(self.student, self.teacher, alpha=momentum)
             self.current_iteration += 1
 
-        # Compute epoch metrics (use actual batch count for streaming)
+        # Compute epoch metrics
         actual_batches = batch_idx + 1
         avg_loss = epoch_loss / actual_batches
         metrics = {
             'loss': avg_loss,
             'learning_rate': self.optimizer.param_groups[0]['lr'],
-            'momentum': momentum if self.momentum_schedule else self.config.training.teacher_momentum
+            'momentum': momentum if self.momentum_schedule else self.config.training_config.teacher_momentum
         }
 
         return metrics
@@ -304,10 +292,10 @@ class DinoTrainer:
             num_epochs: Number of epochs to train (uses config if not specified)
         """
         if num_epochs is None:
-            num_epochs = self.config.training.num_epochs
+            num_epochs = self.config.training_config.num_epochs
 
         logger.info(f"Starting training for {num_epochs} epochs")
-        logger.info(f"Checkpoint directory: {self.config.checkpoint.checkpoint_dir}")
+        logger.info(f"Checkpoint directory: {self.config.checkpoint_config.checkpoint_dir}")
 
         for epoch in range(self.current_epoch + 1, self.current_epoch + num_epochs + 1):
             # Train for one epoch
@@ -329,7 +317,7 @@ class DinoTrainer:
                 })
 
             # Save checkpoint
-            if epoch % self.config.checkpoint.save_every_n_epochs == 0:
+            if epoch % self.config.checkpoint_config.save_every_n_epochs == 0:
                 wandb_run_id = None
                 if wandb is not None and wandb.run is not None:
                     wandb_run_id = wandb.run.id
@@ -343,7 +331,7 @@ class DinoTrainer:
                     iteration=self.current_iteration,
                     config=self.config,
                     metrics=metrics,
-                    checkpoint_dir=self.config.checkpoint.checkpoint_dir,
+                    checkpoint_dir=self.config.checkpoint_config.checkpoint_dir,
                     history=self.history,
                     wandb_run_id=wandb_run_id,
                     scheduler=self.scheduler

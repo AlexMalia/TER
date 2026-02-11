@@ -1,8 +1,9 @@
 """Configuration dataclasses for DINO training."""
 
 from dataclasses import dataclass, field, asdict
+import argparse
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import  Tuple
 import yaml
 
 
@@ -10,146 +11,164 @@ import yaml
 class DataConfig:
     """Data loading configuration."""
 
-    dataset: str = "imagenette"
-    data_path: str = "./data"
-    batch_size: int = 32
-    num_workers: int = 4
-    pin_memory: bool = True
-    train_split: float = 0.7
-    val_split: float = 0.15
-    seed: int = 42
+    dataset: str
+    data_path: str
+    batch_size: int
+    num_workers: int
+    do_pin_memory: bool
+    train_split: float
+    val_split: float
+    seed: int
 
 
 @dataclass
 class AugmentationConfig:
     """Data augmentation configuration."""
+    # Global
+    num_global_views: int
+    global_crop_size: int
+    global_crop_scale_min: float
+    global_crop_scale_max: float
 
-    n_global_crops: int = 2
-    num_local_views: int = 6
-    global_crop_size: int = 224
-    local_crop_size: int = 96
-    global_crop_scale_min: float = 0.4
-    global_crop_scale_max: float = 1.0
-    local_crop_scale_min: float = 0.05
-    local_crop_scale_max: float = 0.4
+    # Local
+    num_local_views: int
+    local_crop_size: int
+    local_crop_scale_min: float
+    local_crop_scale_max: float
 
     # Color jitter
-    color_jitter_prob: float = 0.8
-    color_jitter_brightness: float = 0.4
-    color_jitter_contrast: float = 0.4
-    color_jitter_saturation: float = 0.2
-    color_jitter_hue: float = 0.1
+    color_jitter_prob: float
+    color_jitter_brightness: float
+    color_jitter_contrast: float
+    color_jitter_saturation: float
+    color_jitter_hue: float
 
     # Other augmentations
-    horizontal_flip_prob: float = 0.5
-    grayscale_prob: float = 0.2
-    gaussian_blur_sigma_min: float = 0.1
-    gaussian_blur_sigma_max: float = 2.0
-    solarization_prob: float = 0.2
-    solarization_threshold: int = 128
+    horizontal_flip_prob: float
+    grayscale_prob: float
+    gaussian_blur_sigma_min: float
+    gaussian_blur_sigma_max: float
+    solarization_prob: float
+    solarization_threshold: int
 
     # Normalization
-    normalize_mean: Tuple[float, float, float] = (0.485, 0.456, 0.406)
-    normalize_std: Tuple[float, float, float] = (0.229, 0.224, 0.225)
+    normalize_mean: Tuple[float, float, float]
+    normalize_std: Tuple[float, float, float]
 
     @property
-    def ncrops(self) -> int:
+    def num_total_views(self) -> int:
         """Total number of crops (global + local)."""
-        return self.n_global_crops + self.num_local_views
+        return self.num_global_views + self.num_local_views
 
 
 @dataclass
 class ModelConfig:
     """Model architecture configuration."""
 
-    backbone: str = "resnet18"
-    backbone_pretrained: bool = False
-    projection_hidden_dim: int = 1024
-    projection_bottleneck_dim: int = 256
-    projection_output_dim: int = 2048
-    use_weight_norm: bool = True
+    backbone: str
+    is_backbone_pretrained: bool
+    projection_hidden_dim: int
+    projection_bottleneck_dim: int
+    projection_output_dim: int
+    use_weight_norm: bool
 
 
 @dataclass
 class LossConfig:
     """Loss function configuration."""
 
-    student_temp: float = 0.1
-    teacher_temp: float = 0.04
-    center_momentum: float = 0.9
+    student_temp: float
+    teacher_temp: float
+    center_momentum: float
 
 
 @dataclass
 class OptimizerConfig:
     """Optimizer configuration."""
 
-    optimizer: str = "adamw"
-    lr: float = 0.001
-    weight_decay: float = 0.04
-    betas: Tuple[float, float] = (0.9, 0.999)
-    eps: float = 1e-8
+    optimizer: str
+    lr: float
+    weight_decay: float
+    betas: Tuple[float, float]
+    eps: float
 
 
 @dataclass
 class SchedulerConfig:
     """Learning rate scheduler configuration."""
 
-    scheduler: str = "cosine_warmup"
-    warmup_epochs: int = 10
-    min_lr: float = 1e-6
-    warmup_start_lr: float = 0.0
+    scheduler: str
+    warmup_epochs: int
+    min_lr: float
+    warmup_start_lr: float
 
 
 @dataclass
 class TrainingConfig:
     """Training configuration."""
 
-    num_epochs: int = 100
-    teacher_momentum: float = 0.996
-    teacher_momentum_schedule: bool = True
-    teacher_momentum_final: float = 1.0
-    gradient_clip: Optional[float] = 3.0
-    gradient_accumulation_steps: int = 1
-    mixed_precision: bool = False
-    seed: int = 42
-    device: str = "cuda"
+    num_epochs: int
+    teacher_momentum: float
+    teacher_momentum_schedule: bool
+    teacher_momentum_final: float
+    gradient_clip: float
+    gradient_accumulation_steps: int
+    mixed_precision: bool
+    seed: int
+    device: str
 
 
 @dataclass
 class CheckpointConfig:
     """Checkpointing configuration."""
 
-    checkpoint_dir: str = "./checkpoints"
-    save_every_n_epochs: int = 1
-    save_every_n_iters: Optional[int] = None
-    keep_last_n: int = 5
-    save_best: bool = True
-    resume_from: Optional[str] = None
+    checkpoint_dir: str
+    save_every_n_epochs: int
+    keep_last_n: int
+    save_best: bool
+    resume_from: str
 
 
 @dataclass
 class LoggingConfig:
     """Logging configuration."""
 
-    log_dir: str = "./logs"
-    log_every_n_iters: int = 10
-    log_verbosity: str = "info"
-    use_wandb: bool = False
-    wandb_project: Optional[str] = None
-    wandb_entity: Optional[str] = None
-    wandb_run_name: Optional[str] = None
+    log_dir: str
+    log_every_n_iters: int
+    log_verbosity: str
+    use_wandb: bool
+    wandb_project: str
+    wandb_entity: str
+    wandb_run_name: str
 
 
 _CONFIG_CLASSES = {
-    'data': DataConfig,
-    'augmentation': AugmentationConfig,
-    'model': ModelConfig,
-    'loss': LossConfig,
-    'optimizer': OptimizerConfig,
-    'scheduler': SchedulerConfig,
-    'training': TrainingConfig,
-    'checkpoint': CheckpointConfig,
-    'logging': LoggingConfig,
+    'data_config': DataConfig,
+    'augmentation_config': AugmentationConfig,
+    'model_config': ModelConfig,
+    'loss_config': LossConfig,
+    'optimizer_config': OptimizerConfig,
+    'scheduler_config': SchedulerConfig,
+    'training_config': TrainingConfig,
+    'checkpoint_config': CheckpointConfig,
+    'logging_config': LoggingConfig,
+}
+
+_ARG_MAPPING = {
+    'dataset': [('data_config', 'dataset')],
+    'data_path': [('data_config', 'data_path')],
+    'batch_size': [('data_config', 'batch_size')],
+    'num_workers': [('data_config', 'num_workers')],
+    'backbone': [('model_config', 'backbone')],
+    'output_dim': [('model_config', 'projection_output_dim')],
+    'epochs': [('training_config', 'num_epochs')],
+    'lr': [('optimizer_config', 'lr')],
+    'checkpoint_dir': [('checkpoint_config', 'checkpoint_dir')],
+    'log_dir': [('logging_config', 'log_dir')],
+    'log_verbosity': [('logging_config', 'log_verbosity')],
+    'resume': [('checkpoint_config', 'resume_from')],
+    'device': [('training_config', 'device')],
+    'seed': [('training_config', 'seed'), ('data_config', 'seed')], 
 }
 
 
@@ -157,15 +176,15 @@ _CONFIG_CLASSES = {
 class DinoConfig:
     """Main DINO configuration."""
 
-    data: DataConfig = field(default_factory=DataConfig)
-    augmentation: AugmentationConfig = field(default_factory=AugmentationConfig)
-    model: ModelConfig = field(default_factory=ModelConfig)
-    loss: LossConfig = field(default_factory=LossConfig)
-    optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
-    scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
-    training: TrainingConfig = field(default_factory=TrainingConfig)
-    checkpoint: CheckpointConfig = field(default_factory=CheckpointConfig)
-    logging: LoggingConfig = field(default_factory=LoggingConfig)
+    data_config: DataConfig
+    augmentation_config: AugmentationConfig
+    model_config: ModelConfig
+    loss_config: LossConfig
+    optimizer_config: OptimizerConfig
+    scheduler_config: SchedulerConfig
+    training_config: TrainingConfig
+    checkpoint_config: CheckpointConfig
+    logging_config: LoggingConfig
 
     def to_dict(self):
         """Convert configuration to dictionary."""
@@ -179,17 +198,29 @@ class DinoConfig:
             yaml.dump(self.to_dict(), f, default_flow_style=False, indent=2)
 
     @classmethod
-    def from_yaml(cls, path: str) -> 'DinoConfig':
-        """Load configuration from YAML file."""
-        with open(path) as f:
+    def from_yaml_and_args(cls, yaml_path: str, args: argparse.Namespace) -> 'DinoConfig':
+        """Load configuration from YAML file and override with command-line arguments."""
+        with open(yaml_path) as f:
             data = yaml.safe_load(f) or {}
+
+        print(f"Loaded configuration from {yaml_path}:")
+        print(data)
 
         config_dict = {}
         for key, value in data.items():
             if key in _CONFIG_CLASSES and isinstance(value, dict):
                 config_dict[key] = _CONFIG_CLASSES[key](**value)
+                
+        config = cls(**config_dict)
 
-        return cls(**config_dict)
+        for arg_name, targets in _ARG_MAPPING.items():
+            arg_value = getattr(args, arg_name, None)
+            if arg_value is not None:
+                for section, field in targets:
+                    setattr(getattr(config, section), field, arg_value)
+    
+        return config
+
 
     def __str__(self) -> str:
         """String representation of configuration."""

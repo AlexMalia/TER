@@ -164,36 +164,36 @@ def run_training(device: str):
 
     # Load config - YAML is the single source of truth
     config_path = KAGGLE_WORKING / "configs" / CONFIG_FILE
-    config = DinoConfig.from_yaml(str(config_path))
+    config = DinoConfig.from_yaml_and_args(str(config_path), args=None)
 
     # Only override device (detected at runtime)
-    config.training.device = device
+    config.training_config.device = device
 
     # Create output directories from config
-    Path(config.checkpoint.checkpoint_dir).mkdir(parents=True, exist_ok=True)
-    Path(config.logging.log_dir).mkdir(parents=True, exist_ok=True)
+    Path(config.checkpoint_config.checkpoint_dir).mkdir(parents=True, exist_ok=True)
+    Path(config.logging_config.log_dir).mkdir(parents=True, exist_ok=True)
 
     # Setup logging
-    setup_logging(config.logging.log_dir, config.logging.log_verbosity)
+    setup_logging(config.logging_config.log_dir, config.logging_config.log_verbosity)
     logger = logging.getLogger(__name__)
 
     logger.info(f"Using config: {CONFIG_FILE}")
     logger.info(f"Configuration:\n{config}")
 
     # Set random seed
-    torch.manual_seed(config.training.seed)
+    torch.manual_seed(config.training_config.seed)
     if torch.cuda.is_available():
-        torch.cuda.manual_seed(config.training.seed)
+        torch.cuda.manual_seed(config.training_config.seed)
 
     # Create dataloaders
     logger.info("Creating dataloaders...")
-    train_loader, val_loader, _ = create_dataloaders(config)
+    train_loader, val_loader, _ = create_dataloaders(config.data_config, config.augmentation_config)
     logger.info(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader) if val_loader else 0}")
 
     # Create models using factory method
     logger.info("Creating models...")
-    student = DinoModel.from_config(config)
-    teacher = DinoModel.from_config(config)
+    student = DinoModel.from_config(config.model_config)
+    teacher = DinoModel.from_config(config.model_config)
 
     # Initialize teacher with student weights
     teacher.load_state_dict(student.state_dict())
@@ -208,24 +208,24 @@ def run_training(device: str):
 
     # Create loss using factory method
     dino_loss = DinoLoss.from_config(
-        config.loss,
-        config.augmentation,
+        config.loss_config,
+        config.augmentation_config,
         out_dim=student.output_dim
     )
 
     # Create optimizer using factory method
-    optimizer = create_optimizer(student.parameters(), config.optimizer)
+    optimizer = create_optimizer(student.parameters(), config.optimizer_config)
 
     # Compute scheduler steps accounting for gradient accumulation
-    accumulation_steps = config.training.gradient_accumulation_steps
+    accumulation_steps = config.training_config.gradient_accumulation_steps
     updates_per_epoch = len(train_loader) // accumulation_steps
-    total_steps = config.training.num_epochs * updates_per_epoch
-    warmup_steps = config.scheduler.warmup_epochs * updates_per_epoch
+    total_steps = config.training_config.num_epochs * updates_per_epoch
+    warmup_steps = config.scheduler_config.warmup_epochs * updates_per_epoch
 
     scheduler = create_scheduler(
         optimizer,
-        config.scheduler,
-        config.optimizer,
+        config.scheduler_config,
+        config.optimizer_config,
         total_steps,
         warmup_steps
     )
@@ -237,7 +237,7 @@ def run_training(device: str):
 
     # Create trainer
     trainer = DinoTrainer(
-        config=config,
+        config=config.training_config,
         student=student,
         teacher=teacher,
         optimizer=optimizer,
@@ -249,7 +249,7 @@ def run_training(device: str):
     )
 
     # Resume from checkpoint if specified, or auto-detect from input datasets
-    resume_path = config.checkpoint.resume_from
+    resume_path = config.checkpoint_config.resume_from
     if not resume_path and RESUME_TRAINING:
         found = find_input_checkpoint()
         if found:
@@ -262,7 +262,7 @@ def run_training(device: str):
         trainer.resume_from_checkpoint(resume_path)
 
     # wandb setup for Kaggle
-    if config.logging.use_wandb:
+    if config.logging_config.use_wandb:
         try:
             import wandb
 
@@ -286,13 +286,13 @@ def run_training(device: str):
                 wandb_run_id = wandb.util.generate_id()
 
             wandb.init(
-                project=config.logging.wandb_project or "dino-training",
-                entity=config.logging.wandb_entity,
-                name=config.logging.wandb_run_name,
+                project=config.logging_config.wandb_project or "dino-training",
+                entity=config.logging_config.wandb_entity,
+                name=config.logging_config.wandb_run_name,
                 id=wandb_run_id,
                 resume="allow",
                 config=config.to_dict(),
-                tags=[config.model.backbone, config.data.dataset, "kaggle"],
+                tags=[config.model_config.backbone, config.data_config.dataset, "kaggle"],
             )
             wandb.define_metric("iteration")
             wandb.define_metric("epoch")
@@ -300,7 +300,7 @@ def run_training(device: str):
             wandb.define_metric("epoch/*", step_metric="epoch")
         except ImportError:
             logger.warning("wandb not installed, skipping")
-            config.logging.use_wandb = False
+            config.logging_config.use_wandb = False
 
     # Train
     logger.info("=" * 80)
@@ -315,7 +315,7 @@ def run_training(device: str):
         logger.error(f"Training failed with error: {e}", exc_info=True)
         raise
     finally:
-        if config.logging.use_wandb:
+        if config.logging_config.use_wandb:
             try:
                 import wandb
                 wandb.finish()
@@ -329,8 +329,8 @@ def run_training(device: str):
     print("Output files (available for download):")
     print("=" * 60)
 
-    checkpoint_dir = Path(config.checkpoint.checkpoint_dir)
-    log_dir = Path(config.logging.log_dir)
+    checkpoint_dir = Path(config.checkpoint_config.checkpoint_dir)
+    log_dir = Path(config.logging_config.log_dir)
 
     for dir_path in [checkpoint_dir, log_dir]:
         if dir_path.exists():

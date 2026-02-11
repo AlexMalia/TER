@@ -3,7 +3,7 @@
 import torch
 from torchvision import transforms
 from typing import List, Tuple
-
+from dino.config import AugmentationConfig
 
 class DINOTransform:
     """
@@ -30,18 +30,6 @@ class DINOTransform:
         solarization_threshold: Threshold for solarization
         normalize_mean: Mean for normalization
         normalize_std: Standard deviation for normalization
-
-    Example:
-        >>> transform = DINOTransform(
-        ...     num_local_views=6,
-        ...     global_crop_size=224,
-        ...     local_crop_size=96
-        ... )
-        >>> from PIL import Image
-        >>> img = Image.open('image.jpg')
-        >>> views = transform(img)
-        >>> len(views)
-        8  # 2 global + 6 local
     """
 
     def __init__(
@@ -133,48 +121,43 @@ class DINOTransform:
         return views
 
     @classmethod
-    def from_config(cls, augmentation_config) -> 'DINOTransform':
+    def from_config(cls, augmentation: AugmentationConfig) -> 'DINOTransform':
         """
         Factory method to create DINOTransform from AugmentationConfig.
 
         Args:
-            augmentation_config: AugmentationConfig instance
+            augmentation: AugmentationConfig instance
 
         Returns:
             DINOTransform instance
-
-        Example:
-            >>> from dino.config.config import AugmentationConfig
-            >>> config = AugmentationConfig()
-            >>> transform = DINOTransform.from_config(config)
         """
         return cls(
-            num_local_views=augmentation_config.num_local_views,
-            global_crop_size=augmentation_config.global_crop_size,
-            local_crop_size=augmentation_config.local_crop_size,
+            num_local_views=augmentation.num_local_views,
+            global_crop_size=augmentation.global_crop_size,
+            local_crop_size=augmentation.local_crop_size,
             global_crop_scale=(
-                augmentation_config.global_crop_scale_min,
-                augmentation_config.global_crop_scale_max
+                augmentation.global_crop_scale_min,
+                augmentation.global_crop_scale_max
             ),
             local_crop_scale=(
-                augmentation_config.local_crop_scale_min,
-                augmentation_config.local_crop_scale_max
+                augmentation.local_crop_scale_min,
+                augmentation.local_crop_scale_max
             ),
-            color_jitter_prob=augmentation_config.color_jitter_prob,
+            color_jitter_prob=augmentation.color_jitter_prob,
             color_jitter_params=(
-                augmentation_config.color_jitter_brightness,
-                augmentation_config.color_jitter_contrast,
-                augmentation_config.color_jitter_saturation,
-                augmentation_config.color_jitter_hue
+                augmentation.color_jitter_brightness,
+                augmentation.color_jitter_contrast,
+                augmentation.color_jitter_saturation,
+                augmentation.color_jitter_hue
             ),
-            horizontal_flip_prob=augmentation_config.horizontal_flip_prob,
-            grayscale_prob=augmentation_config.grayscale_prob,
+            horizontal_flip_prob=augmentation.horizontal_flip_prob,
+            grayscale_prob=augmentation.grayscale_prob,
             gaussian_blur_sigma=(
-                augmentation_config.gaussian_blur_sigma_min,
-                augmentation_config.gaussian_blur_sigma_max
+                augmentation.gaussian_blur_sigma_min,
+                augmentation.gaussian_blur_sigma_max
             ),
-            solarization_prob=augmentation_config.solarization_prob,
-            solarization_threshold=augmentation_config.solarization_threshold,
-            normalize_mean=augmentation_config.normalize_mean,
-            normalize_std=augmentation_config.normalize_std,
+            solarization_prob=augmentation.solarization_prob,
+            solarization_threshold=augmentation.solarization_threshold,
+            normalize_mean=augmentation.normalize_mean,
+            normalize_std=augmentation.normalize_std,
         )

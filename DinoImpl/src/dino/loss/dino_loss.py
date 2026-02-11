@@ -5,11 +5,9 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, TYPE_CHECKING
 import logging
 
-if TYPE_CHECKING:
-    from dino.config import LossConfig, AugmentationConfig
+from dino.config import LossConfig, AugmentationConfig
 
 logger = logging.getLogger(__name__)
 
@@ -29,16 +27,8 @@ class DinoLoss(nn.Module):
         student_temp: Temperature for student (lower = sharper, typical: 0.1)
         teacher_temp: Temperature for teacher (lower = more confident, typical: 0.04)
         center_momentum: EMA momentum for centering (typical: 0.9)
-        n_global_crops: Number of global crops (typically 2)
-        ncrops: Total number of crops (global + local, typically 8)
-
-    Example:
-        >>> loss_fn = DinoLoss(out_dim=2048, n_global_crops=2, ncrops=8)
-        >>> student_out = torch.randn(256, 2048)  # 8 views * 32 batch_size
-        >>> teacher_out = torch.randn(64, 2048)   # 2 views * 32 batch_size
-        >>> loss = loss_fn(student_out, teacher_out)
-        >>> print(loss.item() > 0)  # Should be positive
-        True
+        num_global_views: Number of global crops (typically 2)
+        num_total_views: Total number of crops (global + local, typically 8)
     """
 
     def __init__(
@@ -47,8 +37,8 @@ class DinoLoss(nn.Module):
         student_temp: float = 0.1,
         teacher_temp: float = 0.04,
         center_momentum: float = 0.9,
-        n_global_crops: int = 2,
-        ncrops: int = 8
+        num_global_views: int = 2,
+        num_total_views: int = 8
     ):
         super().__init__()
 
@@ -62,8 +52,8 @@ class DinoLoss(nn.Module):
 
         self.student_temp = student_temp
         self.teacher_temp = teacher_temp
-        self.n_global_crops = n_global_crops
-        self.ncrops = ncrops
+        self.num_global_views = num_global_views
+        self.num_total_views = num_total_views
         self.center_momentum = center_momentum
 
         # Register a buffer to store the center for teacher output normalization
@@ -79,9 +69,9 @@ class DinoLoss(nn.Module):
         Compute DINO loss.
 
         Args:
-            student_outputs: Student outputs of shape [ncrops * batch_size, out_dim]
+            student_outputs: Student outputs of shape [num_total_views * batch_size, out_dim]
                             Contains outputs for all views (global + local)
-            teacher_outputs: Teacher outputs of shape [n_global_crops * batch_size, out_dim]
+            teacher_outputs: Teacher outputs of shape [num_global_views * batch_size, out_dim]
                             Contains outputs only for global views
 
         Returns:
@@ -90,14 +80,14 @@ class DinoLoss(nn.Module):
         Note:
             The loss is computed as average cross-entropy between:
             - Each teacher view and each student view (excluding same view pairs)
-            This creates (n_global_crops * ncrops - n_global_crops) loss terms
+            This creates (num_global_views * num_total_views - num_global_views) loss terms
         """
         # Apply temperature scaling and compute log-probabilities for student
         student_logits = student_outputs / self.student_temp
         student_log_probs = F.log_softmax(student_logits, dim=-1)
 
         # Chunk into individual views
-        student_log_probs_chunked = student_log_probs.chunk(self.ncrops)
+        student_log_probs_chunked = student_log_probs.chunk(self.num_total_views)
 
         # Apply centering and temperature scaling for teacher
         teacher_logits = (teacher_outputs - self.center) / self.teacher_temp
@@ -107,7 +97,7 @@ class DinoLoss(nn.Module):
         teacher_probs = teacher_probs.detach()
 
         # Chunk into individual views
-        teacher_probs_chunked = teacher_probs.chunk(self.n_global_crops)
+        teacher_probs_chunked = teacher_probs.chunk(self.num_global_views)
 
         # Compute cross-entropy loss between all view pairs
         total_loss = 0.0
@@ -143,7 +133,7 @@ class DinoLoss(nn.Module):
         prevents the model from collapsing to a trivial solution.
 
         Args:
-            teacher_output: Raw teacher outputs [n_global_crops * batch_size, out_dim]
+            teacher_output: Raw teacher outputs [num_global_views * batch_size, out_dim]
         """
         # Compute batch center (mean across batch dimension)
         batch_center = teacher_output.mean(dim=0, keepdim=True)  # [1, out_dim]
@@ -164,7 +154,7 @@ class DinoLoss(nn.Module):
     def from_config(
         cls,
         loss_config: LossConfig,
-        aug_config: AugmentationConfig,
+        augmentation_config: AugmentationConfig,
         out_dim: int
     ) -> DinoLoss:
         """
@@ -172,7 +162,7 @@ class DinoLoss(nn.Module):
 
         Args:
             loss_config: Loss configuration dataclass
-            aug_config: Augmentation configuration dataclass
+            augmentation_config: Augmentation configuration dataclass
             out_dim: Output dimension of the projection head
 
         Returns:
@@ -183,8 +173,8 @@ class DinoLoss(nn.Module):
             student_temp=loss_config.student_temp,
             teacher_temp=loss_config.teacher_temp,
             center_momentum=loss_config.center_momentum,
-            n_global_crops=aug_config.n_global_crops,
-            ncrops=aug_config.ncrops
+            num_global_views=augmentation_config.num_global_views,
+            num_total_views=augmentation_config.num_total_views
         )
 
     def __repr__(self) -> str:
@@ -193,6 +183,6 @@ class DinoLoss(nn.Module):
             f"student_temp={self.student_temp}, "
             f"teacher_temp={self.teacher_temp}, "
             f"center_momentum={self.center_momentum}, "
-            f"n_global_crops={self.n_global_crops}, "
-            f"ncrops={self.ncrops})"
+            f"num_global_views={self.num_global_views}, "
+            f"num_total_views={self.num_total_views})"
         )

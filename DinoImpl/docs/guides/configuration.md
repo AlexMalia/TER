@@ -180,7 +180,6 @@ training:
 checkpoint:
   checkpoint_dir: ./checkpoints   # Checkpoint directory
   save_every_n_epochs: 1          # Save every N epochs
-  save_every_n_iters: null        # Save every N iterations (optional)
   keep_last_n: 5                  # Number of checkpoints to keep
   save_best: true                 # Keep best checkpoint
   resume_from: null               # Path to checkpoint to resume from

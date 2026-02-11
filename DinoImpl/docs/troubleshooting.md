@@ -464,6 +464,15 @@ wandb.login(key=wandb_api_key)
 
 ---
 
+
+### Erreur de Configuration YAML
+
+**Error**: `TypeError: ModelConfig.__init__() ...`
+
+Cette erreur se produit lorsqu'une configuration YAML est manquante ou mal formatée.
+
+**Solution**: Assurez-vous que votre fichier YAML est complet et correctement formaté. Vous pouvez utiliser le fichier `configs/default.yaml` comme référence pour la structure et les champs requis.
+
 ## Getting Help
 
 If your issue isn't listed here:
