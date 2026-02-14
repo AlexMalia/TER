@@ -5,10 +5,8 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from dino.config import ModelConfig
+from dino.config import ModelConfig
 
 
 class DinoProjectionHead(nn.Module):

@@ -1,6 +1,6 @@
 # Training
 
-This guide explains the DINO training pipeline, including the training loop, EMA updates, and optimizers.
+This guide explains the DINO training pipeline, including the training loop, EMA updates, scheduler, and optimizers.
 
 ---
 
@@ -23,15 +23,21 @@ The DINO training pipeline:
 for epoch in range(num_epochs):
     for batch_idx, (views, _) in enumerate(train_loader):
         # 1. Separate views
-        global_views = views[:2]     # First 2 are global
-        all_views = views            # All 8 views
+        global_views, all_views = get_global_local_views(view_set)
 
         # 2. Teacher forward (no gradients)
         with torch.no_grad():
-            teacher_output = concat([teacher(v) for v in global_views])
+
+          teacher_output = torch.cat(
+            [teacher(v) for v in global_views], 
+            dim=0
+          ) # [num_global_views * batch_size, output_dim]
 
         # 3. Student forward (with gradients)
-        student_output = concat([student(v) for v in all_views])
+        student_output = torch.cat(
+          [student(v) for v in all_views], 
+          dim=0
+        ) # [num_all_views * batch_size, output_dim]
 
         # 4. Compute loss
         loss = dino_loss(student_output, teacher_output)

@@ -3,6 +3,8 @@
 from torch.utils.data import DataLoader, Dataset
 from typing import Optional, Tuple, Union
 import logging
+import torch
+
 
 from .datasets import get_dataset, create_train_val_test_splits
 from .transforms import DINOTransform
@@ -12,27 +14,51 @@ from ..config.config import DataConfig, AugmentationConfig
 logger = logging.getLogger(__name__)
 
 
-def collate_multi_crop(batch):
+def collate_multi_crop(samples):
     """
     Custom collate function for multi-crop batches.
 
-    Converts list of (views_list, label) tuples into proper batch format.
+    Converts list of samples (views_list, label) tuples into proper batch format.
 
     Args:
-        batch: List of (views_list, label) tuples
+        samples: List of (views_list, label) tuples
 
     Returns:
         Tuple of (views_batch, labels_batch) where:
             - views_batch is a list of tensors, one per view type
             - labels_batch is a tensor of labels
+
+    Inputs : 
+        [(List[Tensor[3, H, W]], label1),    # List of 8 tensors per sample
+        (List[Tensor[3, H, W]], label2),
+        ...]
+        
+        where:
+            - List length = 8 (2 global + 6 local views)
+            - H, W vary by view type:
+                * Global views: H=224, W=224
+                * Local views: H=96, W=96
+
+    Outputs:
+        (
+            [Tensor[batch_size, 3, 224, 224],  # global view 1
+            Tensor[batch_size, 3, 224, 224],  # global view 2
+            Tensor[batch_size, 3, 96, 96],    # local view 1
+            Tensor[batch_size, 3, 96, 96],    # local view 2
+            Tensor[batch_size, 3, 96, 96],    # local view 3
+            Tensor[batch_size, 3, 96, 96],    # local view 4
+            Tensor[batch_size, 3, 96, 96],    # local view 5
+            Tensor[batch_size, 3, 96, 96]],   # local view 6
+            
+            Tensor[batch_size]  # labels: [label1, label2, ...]
+        )
     """
-    import torch
 
     # batch is a list of (views_list, label)
     # views_list contains [global1, global2, local1, ..., local6]
 
-    views_lists = [item[0] for item in batch]
-    labels = torch.tensor([item[1] for item in batch])
+    views_lists = [item[0] for item in samples]
+    labels = torch.tensor([item[1] for item in samples])
 
     # Transpose: from list of lists to list of batches
     # [[g1_img1, g2_img1, l1_img1, ...], [g1_img2, g2_img2, l2_img2, ...]]

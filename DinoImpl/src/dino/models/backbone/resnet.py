@@ -42,6 +42,9 @@ class ResnetBackboneDino(BackboneBase):
         self.model = model
         self.variant = variant
 
+        print(f"Initialized {variant} backbone with output_dim={self.output_dim}, pretrained={pretrained}")
+
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through the backbone.

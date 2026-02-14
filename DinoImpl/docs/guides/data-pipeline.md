@@ -54,7 +54,12 @@ class DINOTransform:
         ]
 ```
 
-### View Types
+
+### Augmentation Details 
+
+The values explained here are based on the original DINO paper and the one integrated into the default configuration. You can customize these values in the config file.
+
+#### Crop Sizes and Scales
 
 | View Type | Count | Crop Size | Scale Range | Special |
 |-----------|-------|-----------|-------------|---------|
@@ -62,7 +67,20 @@ class DINOTransform:
 | Global 2 | 1 | 224×224 | 0.4 - 1.0 | + Solarization |
 | Local | 6 | 96×96 | 0.05 - 0.4 | Aggressive cropping |
 
-### Augmentation Details
+This pipeline generates multiple "views" of the same image to support self-supervised learning:
+
+* **Global Views (224×224):** 
+    * Large crop, random crop size between 40% and 100% of the original image. 
+    * Aim to capture the primary semantic context, ensuring the main object is mostly visible.
+    * Resized to 224×224.
+
+* **Local Views (96×96):** 
+    * Small crop, random crop size between 5% and 40% of the original image. 
+    * Focus on fine-grained textures and local features, forcing the model to learn "part-to-whole" relationships.
+    * Resized to 96x96.
+
+#### Other Augmentations
+
 
 **Color Jitter**:
 - Brightness: 0.4
@@ -109,7 +127,9 @@ views = transform(image)  # Returns list of 8 tensors
 
 - **Description**: 10-class subset of ImageNet
 - **Size**: ~9,500 images
-- **Resolution**: 224×224
+- **Resolution**: 
+    - Full size: 500px
+    - Medium size: 320px
 - **Download**: Automatic via torchvision
 
 ```yaml
@@ -120,6 +140,8 @@ data:
 ```
 
 #### ImageNet100
+
+**WIP**: The informations below need to be taken with caution.
 
 - **Description**: 100-class subset of ImageNet (from Kaggle)
 - **Size**: ~130,000 training images
@@ -137,7 +159,7 @@ data:
 
 ```bash
 # Install Kaggle CLI
-pip install kaggle
+uv add kaggle
 
 # Download dataset (requires Kaggle account)
 kaggle datasets download -d ambityga/imagenet100
@@ -198,6 +220,37 @@ def collate_multi_crop(batch):
 - Multi-crop returns list of tensors, not single tensor
 - Need to group by view type (all global1 together, all global2 together, etc.)
 
+**Exemple**
+If you have a batch of 4 images, each with 8 views, the collate function will transform:
+
+```
+[
+  [g1_img1, g2_img1, l1_img1, ..., l6_img1],
+  [g1_img2, g2_img2, l1_img2, ..., l6_img2],
+  [g1_img3, g2_img3, l1_img3, ..., l6_img3],
+  [g1_img4, g2_img4, l1_img4, ..., l6_img4]
+]
+```
+
+into:
+
+```
+[
+  [g1_img1, g1_img2, g1_img3, g1_img4],  # Global view 1 batch
+  [g2_img1, g2_img2, g2_img3, g2_img4],  # Global view 2 batch
+  [l1_img1, l1_img2, l1_img3, l1_img4],  # Local view 1 batch
+  ...
+  [l6_img1, l6_img2, l6_img3, l6_img4]   # Local view 6 batch
+]
+```
+
+Shapes before collate:
+- Each view tensor: `[3, H, W]` (e.g., `[3, 224, 224]` for global, `[3, 96, 96]` for local)
+
+Shapes after collate:
+- Global view batches: `[batch_size, 3, 224, 224]`
+- Local view batches: `[batch_size, 3, 96, 96]`
+
 ### DataLoader Configuration
 
 ```yaml
@@ -209,60 +262,89 @@ data:
 
 ---
 
-## Tensor Shapes
 
-### Complete Transformation Table
+## Complete Data Table
 
-| Stage | Shape | Notes |
-|-------|-------|-------|
-| Original image | `[3, H, W]` | Single RGB image from dataset |
-| After DINOTransform | `List[8 tensors]` | 2 global + 6 local views |
-| Global crop tensors | `[3, 224, 224]` | Large crops (40-100% of image) |
-| Local crop tensors | `[3, 96, 96]` | Small crops (5-40% of image) |
-| After collate | `List[8 batches]` | Batched by view type |
-| Global view batches | `[batch, 3, 224, 224]` | 2 tensors of this shape |
-| Local view batches | `[batch, 3, 96, 96]` | 6 tensors of this shape |
-| After backbone | `[batch, embed_dim]` | 512 for ResNet18, 2048 for ResNet50 |
-| After projection | `[batch, 2048]` | Final embeddings (output_dim) |
-| Teacher output | `[batch*2, 2048]` | Concatenated global views only |
-| Student output | `[batch*8, 2048]` | Concatenated all views |
+### Transformation
 
-### Visual Flow
+| Step | Shape | Description |
+|------|-------|-------------|
+| **Input** | `[3, H, W]` | Original RGB image from dataset |
+| **After DINOTransform** | `List[8 tensors]` | Multi-crop augmentation applied |
 
+**Output Details:**
+- **2 Global views:** `[3, 224, 224]` each large crops covering 40-100% of original image
+- **6 Local views:** `[3, 96, 96]` each small crops covering 5-40% of original image
+
+**Result:** 1 image → 8 augmented views
+
+---
+
+### Batch Collation
+
+**Input Structure**
 ```
-Dataset Image [3, H, W]
-       │
-       ▼
-┌──────────────────────────────────────────────────────┐
-│                  DINOTransform                        │
-├──────────────────────────────────────────────────────┤
-│  Global View 1: RandomResizedCrop(224) + ColorJitter │
-│  Global View 2: RandomResizedCrop(224) + Solarize   │
-│  Local Views 1-6: RandomResizedCrop(96)             │
-└──────────────────────────────────────────────────────┘
-       │
-       ▼
-List of 8 tensors: [g1, g2, l1, l2, l3, l4, l5, l6]
-       │
-       ▼ (DataLoader with custom collate)
-       │
-List of 8 batched tensors:
-  - views[0]: [B, 3, 224, 224]  # All g1 from batch
-  - views[1]: [B, 3, 224, 224]  # All g2 from batch
-  - views[2-7]: [B, 3, 96, 96]  # All local views
-       │
-       ├─── Teacher (global only) ───────────────────┐
-       │    cat([teacher(v) for v in views[:2]])     │
-       │    Shape: [B*2, 2048]                       │
-       │                                              │
-       └─── Student (all views) ─────────────────────┤
-            cat([student(v) for v in views])         │
-            Shape: [B*8, 2048]                       │
-                                                      │
-                        ┌─────────────────────────────┘
-                        ▼
-                   DinoLoss
-            (cross-entropy + centering)
+List[Tuple[List[8 tensors], label]]
+│
+├─ Sample 0: ([8 view tensors : 3, H, W], label_0)
+├─ Sample 1: ([8 view tensors : 3, H, W], label_1)
+├─ Sample 2: ([8 view tensors : 3, H, W], label_2)
+└─ ... (batch_size samples total)
+```
+
+**Type:** `List[Tuple[List[Tensor], int]]`  
+**Length:** `batch_size` (e.g., 32, 64, 128)  
+**Per sample:** 8 tensors (2 global + 6 local) + 1 integer label
+
+**Output Structure**
+```
+Tuple[List[8 batched tensors], labels_tensor]
+│
+├─ views_batch: [
+│   ├─ [0] Global view 1:  [batch_size, 3, 224, 224]
+│   ├─ [1] Global view 2:  [batch_size, 3, 224, 224]
+│   ├─ [2] Local view 1:   [batch_size, 3, 96, 96]
+│   ├─ [3] Local view 2:   [batch_size, 3, 96, 96]
+│   ├─ [4] Local view 3:   [batch_size, 3, 96, 96]
+│   ├─ [5] Local view 4:   [batch_size, 3, 96, 96]
+│   ├─ [6] Local view 5:   [batch_size, 3, 96, 96]
+│   └─ [7] Local view 6:   [batch_size, 3, 96, 96]
+│   ]
+│
+└─ labels_batch: [batch_size]
+```
+
+**Type:** `Tuple[List[Tensor], Tensor]`
+
+---
+
+### Example batch size 32
+
+**Before Collation**
+```python
+# 32 individual samples
+[
+    ([tensor, tensor, ..., tensor], 5),   # Image 1: 8 views + label
+    ([tensor, tensor, ..., tensor], 3),   # Image 2: 8 views + label
+    ...                                    # 30 more samples
+]
+```
+
+**After Collation**
+```python
+(
+    [  # 8 batched tensors
+        torch.Size([32, 3, 224, 224]),  # Global view 1 (all 32 images)
+        torch.Size([32, 3, 224, 224]),  # Global view 2 (all 32 images)
+        torch.Size([32, 3, 96, 96]),    # Local view 1 (all 32 images)
+        torch.Size([32, 3, 96, 96]),    # Local view 2 (all 32 images)
+        torch.Size([32, 3, 96, 96]),    # Local view 3 (all 32 images)
+        torch.Size([32, 3, 96, 96]),    # Local view 4 (all 32 images)
+        torch.Size([32, 3, 96, 96]),    # Local view 5 (all 32 images)
+        torch.Size([32, 3, 96, 96]),    # Local view 6 (all 32 images)
+    ],
+    torch.Size([32])  # All 32 labels: [5, 3, 7, 1, ...]
+)
 ```
 
 ---
@@ -279,7 +361,7 @@ elif dataset_name == 'custom_dataset':
     )
 ```
 
-2. **Create config file** `configs/custom_dataset.yaml`:
+2. **Config file** `configs/custom_dataset.yaml`:
 
 ```yaml
 data:
@@ -291,24 +373,8 @@ data:
 3. **Run training**:
 
 ```bash
-python scripts/train.py --config configs/custom_dataset.yaml
+uv run scripts/train.py --config configs/custom_dataset.yaml
 ```
-
----
-
-## Performance Tips
-
-- **num_workers**: Set to number of CPU cores
-- **pin_memory**: Enable for GPU training
-- **persistent_workers**: Keep workers alive between epochs
-
-```yaml
-data:
-  num_workers: 8
-  pin_memory: true
-```
-
----
 
 ## See Also
 

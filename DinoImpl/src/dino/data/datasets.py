@@ -38,11 +38,6 @@ def get_dataset(
 
     Raises:
         ValueError: If dataset_name is not supported
-
-    Example:
-        >>> from dino.data.transforms import DINOTransform
-        >>> transform = DINOTransform()
-        >>> dataset = get_dataset('imagenette', './data', transform=transform)
     """
     dataset_name = dataset_name.lower()
 
@@ -53,9 +48,13 @@ def get_dataset(
             root=data_path,
             split=split,
             download=download,
-            transform=transform
+            transform=transform,
+            size='320px'
         )
         logger.info(f"Loaded Imagenette dataset ({split}) with {len(imagenette)} samples")
+        for i in range(len(imagenette[0][0])):
+
+            logger.info(f"Image size example: {imagenette[0][0][i].shape} (C, H, W)")
         return imagenette
     
     elif dataset_name == 'imagenet100':

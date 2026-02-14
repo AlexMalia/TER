@@ -36,6 +36,7 @@ class DinoBackbone(BackboneBase):
             model_name,
             pretrained=pretrained,
             num_classes=0,  # remove classification head, forward returns CLS token
+            dynamic_img_size=True, # Interpolate small crop 
         )
 
         self.output_dim = self.model.num_features

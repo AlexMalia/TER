@@ -37,13 +37,14 @@ Output [batch, output_dim]
 | `resnet50` | torchvision | 2048 | 23M |
 | `resnet101` | torchvision | 2048 | 42M |
 | `resnet152` | torchvision | 2048 | 58M |
-| `dino_vits8` | HuggingFace | 384 | 21M |
-| `dino_vits16` | HuggingFace | 384 | 21M |
-| `dino_vitb8` | HuggingFace | 768 | 85M |
-| `dino_vitb16` | HuggingFace | 768 | 85M |
+| `dino_vits8` | Timm | 384 | 21M |
+| `dino_vits16` | Timm | 384 | 21M |
+| `dino_vitb8` | Timm | 768 | 85M |
+| `dino_vitb16` | Timm | 768 | 85M |
 
 ### Using Backbones
 
+Manually create a backbone (Not recommended - use factory method for consistency):
 ```python
 from dino.models import get_backbone
 
@@ -51,42 +52,18 @@ from dino.models import get_backbone
 backbone = get_backbone('resnet18', pretrained=True)
 print(backbone.output_dim)  # 512
 
-# ViT backbone (from HuggingFace)
+# ViT backbone (from Timm)
 backbone = get_backbone('dino_vits16', pretrained=True)
 print(backbone.output_dim)  # 384
 ```
 
-### ResNet Backbones
-
-ResNet backbones use torchvision models with the final FC layer removed:
-
+From DinoModel factory method:
 ```python
-class ResnetBackboneDino(BackboneBase):
-    def __init__(self, variant='resnet18', pretrained=False):
-        self.model = resnet_variant(pretrained=pretrained)
-        self.model.fc = nn.Identity()  # Remove classifier
-        self.output_dim = 512  # or 2048 for ResNet50+
+from dino.models import DinoModel
+
+model = DinoModel.from_config(config.model_config)
+backbone = model.backbone
 ```
-
-### ViT Backbones
-
-ViT backbones use pre-trained DINO models from HuggingFace:
-
-```python
-class DinoBackbone(BackboneBase):
-    VARIANT_MAP = {
-        "dino_vits8": "facebook/dino-vits8",
-        "dino_vits16": "facebook/dino-vits16",
-        "dino_vitb8": "facebook/dino-vitb8",
-        "dino_vitb16": "facebook/dino-vitb16",
-    }
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        outputs = self.model(x, interpolate_pos_encoding=True)
-        return outputs.last_hidden_state[:, 0]  # CLS token
-```
-
----
 
 ## Projection Head
 
@@ -116,33 +93,46 @@ Output [output_dim]
 model:
   projection_hidden_dim: 1024
   projection_bottleneck_dim: 256
-  projection_output_dim: 2048
+  projection_output_dim: 4096
   use_weight_norm: true
 ```
+
+Dino original values :
+- `projection_hidden_dim`: 2048
+- `projection_bottleneck_dim`: 256
+- `projection_output_dim`: 65536
+
+From dino's paper :
+
+|  (Output dim) | 1024 | 4096 | 16384 | **65536** | 262144 |
+| --- | --- | --- | --- | --- | --- |
+| **KNN top-1** | 67.8 | 69.3 | 69.2 | **69.7** | 69.1 |
+
 
 ### Using Projection Head
 
 ```python
 from dino.models import DinoProjectionHead
 
-# Manual creation
+# Manual creation (Not recommended - use factory method for consistency)
 projection = DinoProjectionHead(
     input_dim=512,      # From backbone
     hidden_dim=1024,
     bottleneck_dim=256,
-    output_dim=2048,
+    output_dim=4096,
     use_weight_norm=True
 )
 
 # From config
-projection = DinoProjectionHead.from_config(config.model, input_dim=512)
+student = DinoModel.from_config(config.model_config)
+projection = student.projection_head
 ```
 
 ### Why Weight Normalization?
 
 The projection head uses weight normalization on the final layer for training stability:
 
-- **L2 normalization after bottleneck**: Features are normalized before the final linear layer, ensuring consistent scale regardless of input magnitude
+- **L2 normalization after bottleneck**: Features are normalized before the final linear layer, ensuring consistent scale regardless of input magnitude. This normalization helps with deep projection heads.
 - **Weight normalization on final layer**: Decouples the direction and magnitude of weights, preventing gradient explosion
 - **Why it matters**: Without these techniques, the self-supervised training can become unstable, especially with high-dimensional output spaces (2048 dimensions)
 
@@ -159,8 +149,10 @@ from dino.models import DinoModel
 
 # Using factory method (recommended)
 model = DinoModel.from_config(config)
+backbone = model.backbone
+projection = model.projection_head
 
-# Manual creation
+# Manual creation (Not recommended - use factory method for consistency)
 from dino.models import get_backbone, DinoProjectionHead
 
 backbone = get_backbone('resnet18')
@@ -178,15 +170,6 @@ projections = model(images)  # [batch, output_dim]
 features, projections = model(images, return_backbone_features=True)
 ```
 
-### Model Properties
-
-```python
-model = DinoModel.from_config(config)
-print(model.output_dim)  # 2048
-print(model.backbone.output_dim)  # 512 (for ResNet18)
-```
-
----
 
 ## Student-Teacher Setup
 
@@ -215,23 +198,6 @@ update_teacher_EMA(student, teacher, momentum=0.996)
 ```
 
 See [Training](training.md) for details on the training loop.
-
----
-
-## Model Configuration
-
-```yaml
-model:
-  # Backbone
-  backbone: resnet18           # or dino_vits16, resnet50, etc.
-  backbone_pretrained: false   # Use pretrained weights
-
-  # Projection head
-  projection_hidden_dim: 1024
-  projection_bottleneck_dim: 256
-  projection_output_dim: 2048
-  use_weight_norm: true        # Weight normalization on final layer
-```
 
 ---
 
