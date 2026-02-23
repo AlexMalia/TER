@@ -42,73 +42,103 @@ DinoConfig
 
 ## Loading Configuration
 
-### From YAML
-
 ```python
 from dino.config import DinoConfig
 
-config = DinoConfig.from_yaml('configs/default.yaml')
+args = parse_args()
+
+# Load configuration
+config = DinoConfig.from_yaml_and_args(args.config, args)
 ```
 
-### CLI Overrides
-
-```python
-# Load YAML, then override
-config = DinoConfig.from_yaml('config.yaml')
-if args.batch_size:
-    config.data.batch_size = args.batch_size
-if args.lr:
-    config.optimizer.lr = args.lr
-```
-
-**Priority**: CLI args > YAML file > Defaults
+**Priority**: CLI args > YAML file
 
 ---
 
 ## Configuration Sections
 
+| Field | Exemple | Description |
+|--------|------|-------------|
+| | | |
+
 ### DataConfig
+
+| Field | Exemple | Description |
+|--------|------|-------------|
+| dataset | imagenette | Dataset name (imagenette, imagenet100) |
+| data_path | ./data  | Root path for datasets |
+| batch_size | 32 | Training batch size |
+| num_workers | 4 | DataLoader workers |
+| pin_memory | true | Pin memory for GPU |
+| train_split | 0.7 | Training split ratio |
+| val_split | 0.15 | Validation split ratio (not used yet) |
+| seed | 42 | Random seed for reproducibility (torch, numpy, dataloader) (0 act as no seed) |
 
 ```yaml
 data:
-  dataset: imagenette         # Dataset name (imagenette, imagenet100)
-  data_path: ./data           # Root path for datasets
-  batch_size: 32              # Training batch size
-  num_workers: 4              # DataLoader workers
-  pin_memory: true            # Pin memory for GPU
-  train_split: 0.7            # Training split ratio
-  val_split: 0.15             # Validation split ratio
-  seed: 42                    # Random seed for reproducibility
+  dataset: imagenette
+  data_path: ./data
+  batch_size: 32
+  num_workers: 4
+  pin_memory: true
+  train_split: 0.7
+  val_split: 0.15
+  seed: 42
 ```
 
 ### AugmentationConfig
 
+
+| Field | Exemple | Description |
+| --- | --- | --- |
+| **n_global_crops** | 2 | Number of global (large) crops to generate |
+| **num_local_views** | 6 | Number of local (small) views |
+| **global_crop_size** | 224 | Output resolution for global crops (pixels) |
+| **local_crop_size** | 96 | Output resolution for local crops (pixels) |
+| **global_crop_scale_min** | 0.4 | Minimum scale factor for global crop cropping |
+| **global_crop_scale_max** | 1.0 | Maximum scale factor for global crop cropping |
+| **local_crop_scale_min** | 0.05 | Minimum scale factor for local crop cropping |
+| **local_crop_scale_max** | 0.4 | Maximum scale factor for local crop cropping |
+| **color_jitter_prob** | 0.8 | Probability of applying color jittering |
+| **color_jitter_brightness** | 0.4 | Brightness adjustment intensity |
+| **color_jitter_contrast** | 0.4 | Contrast adjustment intensity |
+| **color_jitter_saturation** | 0.2 | Saturation adjustment intensity |
+| **color_jitter_hue** | 0.1 | Hue adjustment intensity |
+| **horizontal_flip_prob** | 0.5 | Probability of random horizontal flip |
+| **grayscale_prob** | 0.2 | Probability of converting image to grayscale |
+| **gaussian_blur_sigma_min** | 0.1 | Minimum radius for Gaussian blur kernel |
+| **gaussian_blur_sigma_max** | 2.0 | Maximum radius for Gaussian blur kernel |
+| **solarization_prob** | 0.2 | Probability of applying solarization effect |
+| **solarization_threshold** | 128 | Pixel value threshold for solarization (0-255) |
+| **normalize_mean** | [0.485, 0.456, 0.406] | Mean values for RGB normalization (ImageNet) |
+| **normalize_std** | [0.229, 0.224, 0.225] | Std deviation for RGB normalization (ImageNet) |
+
 ```yaml
 augmentation:
   # Crop settings
-  n_global_crops: 2               # Number of global crops
-  num_local_views: 6              # Number of local crops
-  global_crop_size: 224           # Global crop size (pixels)
-  local_crop_size: 96             # Local crop size (pixels)
-  global_crop_scale_min: 0.4      # Min scale for global crops
-  global_crop_scale_max: 1.0      # Max scale for global crops
-  local_crop_scale_min: 0.05      # Min scale for local crops
-  local_crop_scale_max: 0.4       # Max scale for local crops
+  n_global_crops: 2
+  num_local_views: 6
+  global_crop_size: 224
+  local_crop_size: 96
+  global_crop_scale_min: 0.4
+  global_crop_scale_max: 1.0
+  local_crop_scale_min: 0.05
+  local_crop_scale_max: 0.4
 
   # Color augmentation
-  color_jitter_prob: 0.8          # Probability of color jitter
+  color_jitter_prob: 0.8
   color_jitter_brightness: 0.4
   color_jitter_contrast: 0.4
   color_jitter_saturation: 0.2
   color_jitter_hue: 0.1
 
   # Other augmentations
-  horizontal_flip_prob: 0.5       # Probability of horizontal flip
-  grayscale_prob: 0.2             # Probability of grayscale
-  gaussian_blur_sigma_min: 0.1    # Gaussian blur sigma range
+  horizontal_flip_prob: 0.5
+  grayscale_prob: 0.2
+  gaussian_blur_sigma_min: 0.1
   gaussian_blur_sigma_max: 2.0
-  solarization_prob: 0.2          # Probability of solarization
-  solarization_threshold: 128     # Solarization threshold
+  solarization_prob: 0.2
+  solarization_threshold: 128
 
   # Normalization (ImageNet defaults)
   normalize_mean: [0.485, 0.456, 0.406]
@@ -117,20 +147,37 @@ augmentation:
 
 ### ModelConfig
 
+| Field | Exemple | Description |
+|--------|------|-------------|
+| backbone | dino_vits16 | Backbone used by student and teacher (resnet18/34/50/101/152, dino_vits8/16, dino_vitb8/16)|
+| backbone_pretrained | false | either the backbone is pretrained or not|
+| projection_hidden_dim | 2048 | Width of the intermediate fully connected layers in the MLP projector |
+| projection_bottleneck_dim | 258 | Dimension of the reduced layer used to compress features before output |
+| projection_output_dim | 4096 | Final embedding size (or number of prototypes) used for the loss calculation |
+| use_weight_norm | true | Applies Weight Normalization to the last layer to stabilize training |
+
+
 ```yaml
 model:
   # Backbone
-  backbone: resnet18          # resnet18/34/50/101/152, dino_vits8/16, dino_vitb8/16
-  backbone_pretrained: false  # Use pretrained weights
+  backbone: resnet18          
+  backbone_pretrained: false
 
   # Projection head
   projection_hidden_dim: 1024
   projection_bottleneck_dim: 256
   projection_output_dim: 2048
-  use_weight_norm: true       # Weight normalization on final layer
+  use_weight_norm: true 
 ```
 
 ### LossConfig
+
+| Field | Exemple | Description |
+|--------|------|-------------|
+| student_temp | 0.1 | |
+| teacher_temp | 0.04 | |
+| center_momentum | 0.9 | |
+
 
 ```yaml
 loss:

@@ -106,7 +106,7 @@ def create_train_val_test_splits(
     dataset: Dataset,
     train_split: float = 0.7,
     val_split: float = 0.15,
-    seed: int = 42
+    seed: int = 0
 ) -> Tuple[Dataset, Dataset, Dataset]:
     """
     Split dataset into train, validation, and test sets.
@@ -119,12 +119,6 @@ def create_train_val_test_splits(
 
     Returns:
         Tuple of (train_dataset, val_dataset, test_dataset)
-
-    Example:
-        >>> dataset = get_dataset('cifar100', './data')
-        >>> train_ds, val_ds, test_ds = create_train_val_test_splits(dataset)
-        >>> print(len(train_ds), len(val_ds), len(test_ds))
-        35000 7500 7500
     """
     if train_split + val_split > 1.0:
         raise ValueError(
@@ -143,7 +137,10 @@ def create_train_val_test_splits(
     )
 
     # Create generator for reproducibility
-    generator = torch.Generator().manual_seed(seed)
+    if seed:
+        generator = torch.Generator().manual_seed(seed)
+    else: 
+        generator = torch.Generator()
 
     # Split dataset
     train_dataset, val_dataset, test_dataset = random_split(

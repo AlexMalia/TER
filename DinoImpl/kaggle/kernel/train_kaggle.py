@@ -11,6 +11,7 @@ import sys
 import shutil
 import subprocess
 from pathlib import Path
+import numpy as np
 
 # ============================================================================
 # CONFIGURATION - Change this to switch datasets
@@ -181,9 +182,12 @@ def run_training(device: str):
     logger.info(f"Configuration:\n{config}")
 
     # Set random seed
-    torch.manual_seed(config.training_config.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(config.training_config.seed)
+    if config.training_config.seed:
+        torch.manual_seed(config.training_config.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(config.training_config.seed)
+        np.random.seed(config.training_config.seed)
+    
 
     # Create dataloaders
     logger.info("Creating dataloaders...")

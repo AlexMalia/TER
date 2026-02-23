@@ -2,7 +2,7 @@
 import argparse
 import sys
 from pathlib import Path
-
+import numpy as np
 import torch
 
 # Add src to path
@@ -82,9 +82,11 @@ def main():
     logger.info(f"Configuration:\n{config}")
 
     # Set random seed
-    torch.manual_seed(config.training_config.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(config.training_config.seed)
+    if config.training_config.seed:
+        torch.manual_seed(config.training_config.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(config.training_config.seed)
+        np.random.seed(config.training_config.seed)
 
     # Create dataloaders
     logger.info("Creating dataloaders...")
