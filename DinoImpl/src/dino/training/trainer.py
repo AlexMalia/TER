@@ -160,6 +160,9 @@ class DinoTrainer:
             # Compute loss
             loss = self.loss_fn(student_output, teacher_output)
 
+            true_loss = loss.item()
+            epoch_loss += true_loss
+
             loss = loss / accumulation_steps
 
             # Backward pass
@@ -198,7 +201,7 @@ class DinoTrainer:
                 self.history.record_iteration(
                     iteration=self.current_iteration,
                     metrics={
-                        'loss': loss.item(),
+                        'loss': true_loss,
                         'learning_rate': current_lr,
                         'momentum': momentum
                     }
@@ -209,7 +212,7 @@ class DinoTrainer:
                 if wandb is not None and wandb.run is not None:
                     wandb.log({
                         "iteration": self.current_iteration,
-                        "train/loss": loss.item(),
+                        "train/loss": true_loss,
                         "train/lr": current_lr,
                         "train/momentum": momentum,
                     })
@@ -219,7 +222,7 @@ class DinoTrainer:
                 momentum = self.momentum_schedule[min(self.current_iteration, len(self.momentum_schedule) - 1)]
             else:
                 momentum = self.config.training_config.teacher_momentum
-            pbar.set_postfix({'loss': f"{loss.item():.4f}", 'momentum': f"{momentum:.4f}"})
+            pbar.set_postfix({'loss': f"{true_loss:.4f}", 'momentum': f"{momentum:.4f}"})
 
 
              # Log periodically
@@ -227,7 +230,7 @@ class DinoTrainer:
                 progress_str = f"{batch_idx+1}/{num_batches}"
                 logger.info(
                     f"Epoch {epoch} [{progress_str}] "
-                    f"Loss: {loss.item():.4f}, "
+                    f"Loss: {true_loss:.4f}, "
                     f"Momentum: {momentum:.4f}"
                 )
                 logger.debug(f"Loss infos: {self.loss_fn}")
@@ -271,6 +274,24 @@ class DinoTrainer:
                 momentum = self.config.training_config.teacher_momentum
 
             update_teacher_EMA(self.student, self.teacher, alpha=momentum)
+            current_lr = self.optimizer.param_groups[0]['lr']
+            self.history.record_iteration(
+                iteration=self.current_iteration,
+                metrics={
+                    'loss': true_loss,
+                    'learning_rate': current_lr,
+                    'momentum': momentum
+                }
+            )
+            if wandb is not None and wandb.run is not None:
+                wandb.log({
+                    "iteration": self.current_iteration,
+                    "train/loss": true_loss,
+                    "train/lr": current_lr,
+                    "train/momentum": momentum,
+                })
+
+            self.current_iteration += 1
             self.current_iteration += 1
 
         # Compute epoch metrics

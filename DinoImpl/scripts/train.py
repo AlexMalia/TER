@@ -114,7 +114,7 @@ def main():
         out_dim=student.output_dim
     )
 
-    # Create optimizer and scheduler
+    # Create optimizer and its scheduler
     optimizer = create_optimizer(student.parameters(), config.optimizer_config)
 
     accumulation_steps = config.training_config.gradient_accumulation_steps
@@ -125,7 +125,7 @@ def main():
     total_steps = config.training_config.num_epochs * updates_per_epoch
     warmup_steps = config.scheduler_config.warmup_epochs * updates_per_epoch
 
-    scheduler = create_scheduler(
+    optim_scheduler = create_scheduler(
         optimizer,
         config.scheduler_config,
         config.optimizer_config,
@@ -144,7 +144,7 @@ def main():
         student=student,
         teacher=teacher,
         optimizer=optimizer,
-        scheduler=scheduler,
+        scheduler=optim_scheduler,
         loss_fn=dino_loss,
         train_loader=train_loader,
         val_loader=val_loader,

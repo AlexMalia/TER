@@ -13,6 +13,25 @@ The DINO training pipeline:
 3. **Backward pass**: Gradients only through student
 4. **EMA update**: Teacher weights updated from student via exponential moving average
 
+
+---
+
+## Initialization Sequence
+
+The complete initialization flow:
+
+1. **Configuration**: Load YAML → Override with CLI args
+2. **Logging**: Setup file and console handlers
+3. **Data**: Create dataloaders with `create_dataloaders(config)`
+4. **Models**: Create with `DinoModel.from_config(config)`
+5. **Loss**: Create with `DinoLoss.from_config(config.loss, config.augmentation, out_dim)`
+6. **Optimizer**: Create with `create_optimizer(params, config.optimizer)`
+7. **Scheduler**: Create with `create_scheduler(...)`
+8. **Trainer**: Assemble all components
+9. **Resume** (optional): Load checkpoint if resuming
+10. **Setup W&B** (optional): Initialize W&B run and config
+11. **Train**: Run training loop
+
 ---
 
 ## Training Loop
@@ -109,12 +128,17 @@ def update_teacher_EMA(student, teacher, momentum=0.996):
         t_param.data = momentum * t_param.data + (1 - momentum) * s_param.data
 ```
 
+Current weight matrix is equal to 99.6 of the previous teacher weights + 0.4 of the current student weights.
+
+Do not confuse teacher momentum and center momentum. The first updates the teacher's network weights, while the second updates the centering vector to prevent trivial solution and collapse.
+
 ### Momentum Scheduling
+
 
 The momentum typically increases during training:
 
 - **Early training**: Lower momentum (0.996) - teacher learns faster
-- **Late training**: Higher momentum (→1.0) - teacher becomes stable
+- **Late training**: Higher momentum (0.999) - teacher becomes stable
 
 ```python
 from dino.utils import get_momentum_schedule
@@ -131,6 +155,8 @@ momentum = schedule[current_iteration]
 update_teacher_EMA(student, teacher, momentum)
 ```
 
+For all schedules, we use a cosine schedule. Source code for the schedule can be found in `dino/utils/schedule.py`.
+
 ### Configuration
 
 ```yaml
@@ -140,13 +166,15 @@ training:
   teacher_momentum_schedule: true
 ```
 
+Dino original implementation uses a cosine schedule that starts at 0.996 and ends at 1.0.
+
 ---
 
 ## Optimizer
 
 ### Supported Optimizers
 
-Currently supports AdamW:
+Currently supports AdamW, Adam and SGD:
 
 ```python
 from dino.training import create_optimizer
@@ -157,12 +185,16 @@ optimizer = create_optimizer(
 )
 ```
 
+### Weight decay
+
+We use a fixed weight decay, to follow the original DINO implementation we must use a scheduled weight decay that starts at 0.04 and ends at 0.4.
+
 ### Configuration
 
 ```yaml
 optimizer:
   optimizer: adamw
-  lr: 0.001
+  lr: 0.0005
   weight_decay: 0.04
   betas: [0.9, 0.999]
 ```
@@ -173,17 +205,7 @@ optimizer:
 
 ### Cosine with Warmup
 
-The default scheduler uses linear warmup followed by cosine decay:
-
-```
-LR
-│
-│  ╱‾‾‾‾‾‾‾‾‾‾‾‾‾╲
-│ ╱                ╲
-│╱                  ╲___
-└─────────────────────────→ Steps
-  │warmup│   cosine decay
-```
+Supports cosine_warmup, cosine, linear and constant
 
 ```python
 from dino.training import create_scheduler
@@ -214,6 +236,8 @@ scheduler:
 
 ---
 
+Dino original implementation uses adamw with a cosine LR schedule with linear warmup for the first 10 epochs. The default learning rate is 0.0005 for batch size 256 and scale linearly with batch size, the min learning rate (target learning rate at the end of cosine decay) is 1e-6.
+
 ## Gradient Clipping
 
 Prevents exploding gradients during training:
@@ -230,12 +254,16 @@ if config.training.gradient_clip:
 
 ```yaml
 training:
-  gradient_clip: 3.0  # Max gradient norm
+  gradient_clip: 3.0
 ```
+
+Dino original implementation uses a max gradient norm of 3.0.
 
 ---
 
 ## Training Configuration
+
+Values are exemples. Adjust based on your dataset, model size and GPU resources.
 
 ```yaml
 training:
@@ -248,8 +276,10 @@ training:
 
 optimizer:
   optimizer: adamw
-  lr: 0.001
+  lr: 0.0005
   weight_decay: 0.04
+  betas: [0.9, 0.999]
+  eps: 1.0e-08
 
 scheduler:
   scheduler: cosine_warmup
@@ -261,13 +291,19 @@ scheduler:
 
 ## Training History
 
+
+The `History` class has 2 purposes : 
+1. **Logging**: Track metrics like loss, learning rate, momentum at each iteration and epoch
+2. **Visualization**: Provides tools to print and plot training curves for analysis
+
 The `History` class tracks metrics during training:
 
 ```python
 from dino.utils import History
 
-history = History()
+history = History(metadata={<Info about the training run, e.g. config, device, etc.>})
 
+1. Logging metrics during training
 # Record during training
 history.record_iteration(iteration, {
     'loss': loss.item(),
@@ -281,31 +317,18 @@ history.record_epoch(epoch, {
     'momentum': current_momentum
 })
 
-# Save/Load
 history.save('training_history.json')
+
+
+2. Provide visualization tools
+# Save/Load
 history = History.load('training_history.json')
 
 # Visualization
 history.plot_all(level='epoch', save_path='plots.png')
 ```
 
----
-
-## Initialization Sequence
-
-The complete initialization flow:
-
-1. **Configuration**: Load YAML → Override with CLI args
-2. **Logging**: Setup file and console handlers
-3. **Data**: Create dataloaders with `create_dataloaders(config)`
-4. **Models**: Create with `DinoModel.from_config(config)`
-5. **Teacher**: Copy student weights → Disable gradients
-6. **Loss**: Create with `DinoLoss.from_config(config.loss, config.augmentation, out_dim)`
-7. **Optimizer**: Create with `create_optimizer(params, config.optimizer)`
-8. **Scheduler**: Create with `create_scheduler(...)`
-9. **Trainer**: Assemble all components
-10. **Resume** (optional): Load checkpoint
-11. **Train**: Run training loop
+  Note : an improvment of this would be to split the history into 2 classes, each with a single responsibility, one for logging and one for visualization. This would make the code cleaner and easier to maintain. 
 
 ---
 
@@ -320,9 +343,9 @@ training:
 
 **How it works**:
 1. Forward pass and loss computation for each mini-batch
-2. Divide loss by `gradient_accumulation_steps`
-3. Backward pass (gradients accumulate)
-4. After N steps, optimizer step and zero gradients
+2. Divide loss by `accumulation_steps` to normalize gradients
+3. Backward pass (gradients accumulate in-place across steps)
+4. After N steps: clip gradients, run optimizer, update LR scheduler, update teacher EMA, then zero gradients
 
 ```python
 for i, batch in enumerate(dataloader):
@@ -330,9 +353,12 @@ for i, batch in enumerate(dataloader):
     loss.backward()
 
     if (i + 1) % gradient_accumulation_steps == 0:
+        clip_grad_norm_(student.parameters(), max_norm)  # clipping on accumulated gradients
         optimizer.step()
         optimizer.zero_grad()
+        scheduler.step()
         update_teacher_EMA(student, teacher, momentum)
+        current_iteration += 1
 ```
 
 **Use case**: With `batch_size=8` and `gradient_accumulation_steps=4`, you get the same gradient statistics as `batch_size=32` but using 4× less GPU memory per step.

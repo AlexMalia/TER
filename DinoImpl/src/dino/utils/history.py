@@ -25,13 +25,6 @@ class History:
         iteration_metrics: List of dicts, one per logged iteration
         epoch_metrics: List of dicts, one per epoch
         metadata: Dict with training run info (start_time, config, etc.)
-
-    Example:
-        >>> history = History()
-        >>> history.record_iteration(0, {'loss': 2.5, 'learning_rate': 0.001, 'momentum': 0.996})
-        >>> history.record_epoch(1, {'loss': 2.3, 'learning_rate': 0.001, 'momentum': 0.997})
-        >>> history.save('training_history.json')
-        >>> history.plot_loss()
     """
 
     def __init__(self, metadata: Optional[Dict[str, Any]] = None):
