@@ -3,7 +3,8 @@
 import torch
 import torch.nn as nn
 from typing import Optional
-import math
+
+from .schedule import cosine_scheduler
 
 
 @torch.no_grad()
@@ -54,26 +55,13 @@ def get_momentum_schedule(
 
     Returns:
         List of momentum values for each iteration
-
-    Example:
-        >>> schedule = get_momentum_schedule(0.996, 1.0, num_epochs=100, niter_per_epoch=200)
-        >>> print(len(schedule))
-        20000
-        >>> print(schedule[0], schedule[-1])
-        0.996 1.0
     """
-    momentum_schedule = []
-    for epoch in range(num_epochs):
-        for _ in range(niter_per_epoch):
-            # Cosine schedule from base_momentum to final_momentum
-            progress = epoch * niter_per_epoch + len(momentum_schedule)
-            total_iters = num_epochs * niter_per_epoch
-            momentum = final_momentum - (final_momentum - base_momentum) * (
-                math.cos(math.pi * progress / total_iters) + 1
-            ) / 2
-            momentum_schedule.append(momentum)
-
-    return momentum_schedule
+    return cosine_scheduler(
+        base_value=base_momentum,
+        final_value=final_momentum,
+        epochs=num_epochs,
+        niter_per_ep=niter_per_epoch,
+    )
 
 
 class EMAUpdater:

@@ -1,11 +1,14 @@
+import logging
+
 from .backbone import BackboneBase
-from transformers import ViTModel, ViTConfig
+import timm
 import torch
 
+logger = logging.getLogger(__name__)
 
 class DinoBackbone(BackboneBase):
     """
-    DINO (v1) backbone using HuggingFace transformers.
+    DINO (v1) backbone using timm.
 
     Uses the CLS token from the last hidden state as output.
 
@@ -14,11 +17,13 @@ class DinoBackbone(BackboneBase):
         pretrained: Whether to use pre-trained weights
     """
 
+
+
     VARIANT_MAP = {
-        "dino_vits8": "facebook/dino-vits8",
-        "dino_vits16": "facebook/dino-vits16",
-        "dino_vitb8": "facebook/dino-vitb8",
-        "dino_vitb16": "facebook/dino-vitb16",
+        "dino_vits8": "vit_small_patch8_224",
+        "dino_vits16": "vit_small_patch16_224",
+        "dino_vitb8": "vit_base_patch8_224",
+        "dino_vitb16": "vit_base_patch16_224",
     }
 
     def __init__(self, variant: str = "dino_vits16", pretrained: bool = False):
@@ -32,14 +37,16 @@ class DinoBackbone(BackboneBase):
 
         model_name = self.VARIANT_MAP[variant]
 
-        if pretrained:
-            self.model = ViTModel.from_pretrained(model_name)
-        else:
-            config = ViTConfig.from_pretrained(model_name)
-            self.model = ViTModel(config)
+        self.model = timm.create_model(
+            model_name,
+            pretrained=pretrained,
+            num_classes=0,  # remove classification head, forward returns CLS token
+            dynamic_img_size=True, # Interpolate small crop 
+        )
 
-        self.output_dim = self.model.config.hidden_size
+        self.output_dim = self.model.num_features
         self.variant = variant
+        logger.info(f"Initialized {variant} backbone with output_dim={self.output_dim}, pretrained={pretrained}")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -51,9 +58,7 @@ class DinoBackbone(BackboneBase):
         Returns:
             Feature tensor of shape [batch_size, output_dim]
         """
-        outputs = self.model(x, interpolate_pos_encoding=True)
-        cls_token = outputs.last_hidden_state[:, 0]
-        return cls_token
+        return self.model(x)
 
     def __repr__(self) -> str:
         return f"DinoBackbone(variant={self.variant}, output_dim={self.output_dim})"

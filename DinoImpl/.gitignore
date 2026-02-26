@@ -28,11 +28,12 @@ site/
 wandb/
 
 
-# 1. Ignorer tout le contenu du dossier kaggle
+# Kaggle
 kaggle/*
 
-# 2. Ne pas ignorer le script manager
 !kaggle/kaggle_manager.sh
 
-# 3. Ne pas ignorer le dossier kernel (et tout ce qu'il contient)
 !kaggle/kernel/
+
+# Experiences
+experiences/
