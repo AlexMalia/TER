@@ -55,7 +55,6 @@ checkpoint_config:
   save_every_n_epochs: 1
   save_best: true
   resume_from: null
-  keep_last_n: 5
 ```
 
 voir [Configuration Guide](configuration.md#checkpoint_config) for details.

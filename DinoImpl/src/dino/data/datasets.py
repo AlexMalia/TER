@@ -52,9 +52,7 @@ def get_dataset(
             size='320px'
         )
         logger.info(f"Loaded Imagenette dataset ({split}) with {len(imagenette)} samples")
-        for i in range(len(imagenette[0][0])):
-
-            logger.info(f"Image size example: {imagenette[0][0][i].shape} (C, H, W)")
+        logger.info(f"Image size example: {imagenette[0][0][0].shape} (C, H, W)")
         return imagenette
     
     elif dataset_name == 'imagenet100':

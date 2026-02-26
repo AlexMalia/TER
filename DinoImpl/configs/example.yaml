@@ -320,12 +320,6 @@ checkpoint:
   # Recommended: 1-10 depending on dataset size
   save_every_n_epochs: 1
 
-  # Keep only the last N checkpoints (delete older ones)
-  # Set to -1 to keep all checkpoints
-  # Type: int
-  # Recommended: 3-5 (saves disk space)
-  keep_last_n: 5
-
   # Save best checkpoint based on validation loss
   # Type: bool
   save_best: true

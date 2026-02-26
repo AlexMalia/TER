@@ -250,14 +250,12 @@ training_config:
 | --- | --- | --- |
 | checkpoint_dir | ./checkpoints | Checkpoint directory |
 | save_every_n_epochs | 1 | Save every N epochs |
-| keep_last_n | 5 | Number of checkpoints to keep |
 | resume_from | null | Path to checkpoint to resume from |
 
 ```yaml
 checkpoint_config:
   checkpoint_dir: ./checkpoints
   save_every_n_epochs: 1
-  keep_last_n: 5
   resume_from: null
 
 ```

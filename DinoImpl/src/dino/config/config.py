@@ -2,9 +2,13 @@
 
 from dataclasses import dataclass, field, asdict
 import argparse
+import logging
 from pathlib import Path
 from typing import  Tuple
 import yaml
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -123,7 +127,6 @@ class CheckpointConfig:
 
     checkpoint_dir: str
     save_every_n_epochs: int
-    keep_last_n: int
     resume_from: str
 
 
@@ -201,8 +204,7 @@ class DinoConfig:
         with open(yaml_path) as f:
             data = yaml.safe_load(f) or {}
 
-        print(f"Loaded configuration from {yaml_path}:")
-        print(data)
+        logger.info(f"Loaded configuration from {yaml_path}:")
 
         config_dict = {}
         for key, value in data.items():

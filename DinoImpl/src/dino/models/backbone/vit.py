@@ -1,7 +1,10 @@
+import logging
+
 from .backbone import BackboneBase
 import timm
 import torch
 
+logger = logging.getLogger(__name__)
 
 class DinoBackbone(BackboneBase):
     """
@@ -13,6 +16,8 @@ class DinoBackbone(BackboneBase):
         variant: DINO variant ('dino_vits8', 'dino_vits16', 'dino_vitb8', 'dino_vitb16')
         pretrained: Whether to use pre-trained weights
     """
+
+
 
     VARIANT_MAP = {
         "dino_vits8": "vit_small_patch8_224",
@@ -41,7 +46,7 @@ class DinoBackbone(BackboneBase):
 
         self.output_dim = self.model.num_features
         self.variant = variant
-        print(f"Initialized {variant} backbone with output_dim={self.output_dim}, pretrained={pretrained}")
+        logger.info(f"Initialized {variant} backbone with output_dim={self.output_dim}, pretrained={pretrained}")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
