@@ -42,26 +42,16 @@ DinoConfig
 
 ## Loading Configuration
 
-### From YAML
-
 ```python
 from dino.config import DinoConfig
 
-config = DinoConfig.from_yaml('configs/default.yaml')
+args = parse_args()
+
+# Load configuration
+config = DinoConfig.from_yaml_and_args(args.config, args)
 ```
 
-### CLI Overrides
-
-```python
-# Load YAML, then override
-config = DinoConfig.from_yaml('config.yaml')
-if args.batch_size:
-    config.data.batch_size = args.batch_size
-if args.lr:
-    config.optimizer.lr = args.lr
-```
-
-**Priority**: CLI args > YAML file > Defaults
+**Priority**: CLI args > YAML file
 
 ---
 
@@ -69,46 +59,82 @@ if args.lr:
 
 ### DataConfig
 
+| Field | Exemple | Description |
+|--------|------|-------------|
+| dataset | imagenette | Dataset name (imagenette, imagenet100) |
+| data_path | ./data  | Root path for datasets |
+| batch_size | 32 | Training batch size |
+| num_workers | 4 | DataLoader workers |
+| pin_memory | true | Pin memory for GPU |
+| train_split | 0.7 | Training split ratio |
+| val_split | 0.15 | Validation split ratio (not used yet) |
+| seed | 42 | Random seed for reproducibility (torch, numpy, dataloader) (0 act as no seed) |
+
 ```yaml
-data:
-  dataset: imagenette         # Dataset name (imagenette, imagenet100)
-  data_path: ./data           # Root path for datasets
-  batch_size: 32              # Training batch size
-  num_workers: 4              # DataLoader workers
-  pin_memory: true            # Pin memory for GPU
-  train_split: 0.7            # Training split ratio
-  val_split: 0.15             # Validation split ratio
-  seed: 42                    # Random seed for reproducibility
+data_config:
+  dataset: imagenette
+  data_path: ./data
+  batch_size: 32
+  num_workers: 4
+  pin_memory: true
+  train_split: 0.7
+  val_split: 0.15
+  seed: 42
 ```
 
 ### AugmentationConfig
 
+
+| Field | Exemple | Description |
+| --- | --- | --- |
+| **n_global_crops** | 2 | Number of global (large) crops to generate |
+| **num_local_views** | 6 | Number of local (small) views |
+| **global_crop_size** | 224 | Output resolution for global crops (pixels) |
+| **local_crop_size** | 96 | Output resolution for local crops (pixels) |
+| **global_crop_scale_min** | 0.4 | Minimum scale factor for global crop cropping |
+| **global_crop_scale_max** | 1.0 | Maximum scale factor for global crop cropping |
+| **local_crop_scale_min** | 0.05 | Minimum scale factor for local crop cropping |
+| **local_crop_scale_max** | 0.4 | Maximum scale factor for local crop cropping |
+| **color_jitter_prob** | 0.8 | Probability of applying color jittering |
+| **color_jitter_brightness** | 0.4 | Brightness adjustment intensity |
+| **color_jitter_contrast** | 0.4 | Contrast adjustment intensity |
+| **color_jitter_saturation** | 0.2 | Saturation adjustment intensity |
+| **color_jitter_hue** | 0.1 | Hue adjustment intensity |
+| **horizontal_flip_prob** | 0.5 | Probability of random horizontal flip |
+| **grayscale_prob** | 0.2 | Probability of converting image to grayscale |
+| **gaussian_blur_sigma_min** | 0.1 | Minimum radius for Gaussian blur kernel |
+| **gaussian_blur_sigma_max** | 2.0 | Maximum radius for Gaussian blur kernel |
+| **solarization_prob** | 0.2 | Probability of applying solarization effect |
+| **solarization_threshold** | 128 | Pixel value threshold for solarization (0-255) |
+| **normalize_mean** | [0.485, 0.456, 0.406] | Mean values for RGB normalization (ImageNet) |
+| **normalize_std** | [0.229, 0.224, 0.225] | Std deviation for RGB normalization (ImageNet) |
+
 ```yaml
-augmentation:
+augmentation_config:
   # Crop settings
-  n_global_crops: 2               # Number of global crops
-  num_local_views: 6              # Number of local crops
-  global_crop_size: 224           # Global crop size (pixels)
-  local_crop_size: 96             # Local crop size (pixels)
-  global_crop_scale_min: 0.4      # Min scale for global crops
-  global_crop_scale_max: 1.0      # Max scale for global crops
-  local_crop_scale_min: 0.05      # Min scale for local crops
-  local_crop_scale_max: 0.4       # Max scale for local crops
+  n_global_crops: 2
+  num_local_views: 6
+  global_crop_size: 224
+  local_crop_size: 96
+  global_crop_scale_min: 0.4
+  global_crop_scale_max: 1.0
+  local_crop_scale_min: 0.05
+  local_crop_scale_max: 0.4
 
   # Color augmentation
-  color_jitter_prob: 0.8          # Probability of color jitter
+  color_jitter_prob: 0.8
   color_jitter_brightness: 0.4
   color_jitter_contrast: 0.4
   color_jitter_saturation: 0.2
   color_jitter_hue: 0.1
 
   # Other augmentations
-  horizontal_flip_prob: 0.5       # Probability of horizontal flip
-  grayscale_prob: 0.2             # Probability of grayscale
-  gaussian_blur_sigma_min: 0.1    # Gaussian blur sigma range
+  horizontal_flip_prob: 0.5
+  grayscale_prob: 0.2
+  gaussian_blur_sigma_min: 0.1
   gaussian_blur_sigma_max: 2.0
-  solarization_prob: 0.2          # Probability of solarization
-  solarization_threshold: 128     # Solarization threshold
+  solarization_prob: 0.2
+  solarization_threshold: 128
 
   # Normalization (ImageNet defaults)
   normalize_mean: [0.485, 0.456, 0.406]
@@ -117,152 +143,145 @@ augmentation:
 
 ### ModelConfig
 
+| Field | Exemple | Description |
+|--------|------|-------------|
+| backbone | dino_vits16 | Backbone used by student and teacher (resnet18/34/50/101/152, dino_vits8/16, dino_vitb8/16)|
+| backbone_pretrained | false | either the backbone is pretrained or not|
+| projection_hidden_dim | 2048 | Width of the intermediate fully connected layers in the MLP projector |
+| projection_bottleneck_dim | 258 | Dimension of the reduced layer used to compress features before output |
+| projection_output_dim | 4096 | Final embedding size (or number of prototypes) used for the loss calculation |
+| use_weight_norm | true | Applies Weight Normalization to the last layer to stabilize training |
+
+
 ```yaml
-model:
+model_config:
   # Backbone
-  backbone: resnet18          # resnet18/34/50/101/152, dino_vits8/16, dino_vitb8/16
-  backbone_pretrained: false  # Use pretrained weights
+  backbone: resnet18          
+  backbone_pretrained: false
 
   # Projection head
   projection_hidden_dim: 1024
   projection_bottleneck_dim: 256
   projection_output_dim: 2048
-  use_weight_norm: true       # Weight normalization on final layer
+  use_weight_norm: true 
 ```
 
 ### LossConfig
 
+| Field | Exemple | Description |
+|--------|------|-------------|
+| student_temp | 0.1 | softmax temperature for student (higher = softer)|
+| teacher_temp | 0.04 | softmax temperature for teacher (lower = sharper) |
+| center_momentum | 0.9 | teacher centering EMA momentum |
+
+
 ```yaml
-loss:
-  student_temp: 0.1           # Student temperature (higher = softer)
-  teacher_temp: 0.04          # Teacher temperature (lower = sharper)
-  center_momentum: 0.9        # EMA momentum for centering
+loss_config:
+  student_temp: 0.1
+  teacher_temp: 0.04
+  center_momentum: 0.9 
 ```
 
 ### OptimizerConfig
 
+| Field | Exemple | Description |
+|--------|------|-------------|
+| optimizer | adamw | optimizer Algorithm |
+| lr | 0.001 | learning rate (must scale linearly with batch size) |
+| weight_decay | 0.04 | Weight decay penalization |
+| betas |  [0.9, 0.999] | Adam betas |
+
+
 ```yaml
-optimizer:
-  optimizer: adamw            # Optimizer type
-  lr: 0.001                   # Learning rate
-  weight_decay: 0.04          # Weight decay
-  betas: [0.9, 0.999]         # Adam betas
+optimizer_config:
+  optimizer: adamw
+  lr: 0.001 
+  weight_decay: 0.04  
+  betas: [0.9, 0.999] 
 ```
 
 ### SchedulerConfig
 
+| Field | Exemple | Description |
+|--------|------|-------------|
+| scheduler | cosine_warmup | Scheduler type |
+| warmup_epochs | 10 | Number of warmup epoch |
+| min_lr | 1.0e-6 | Minimum lr after decay |
+| warmup_start_lr |  0.0 | Starting LR for warmup scaling up during warmup |
+
+
 ```yaml
-scheduler:
-  scheduler: cosine_warmup    # Scheduler type (cosine_warmup)
-  warmup_epochs: 10           # Number of warmup epochs
-  min_lr: 1.0e-6              # Minimum learning rate after decay
-  warmup_start_lr: 0.0        # Starting LR for warmup (ramps up to optimizer.lr)
+scheduler_config:
+  scheduler: cosine_warmup
+  warmup_epochs: 10
+  min_lr: 1.0e-6
+  warmup_start_lr: 0.0 
 ```
 
 ### TrainingConfig
 
+| Field | Exemple | Description |
+| --- | --- | --- |
+| num_epochs | 100 | Total epochs |
+| teacher_momentum | 0.996 | EMA momentum for teacher |
+| teacher_momentum_final | 1.0 | Final momentum (if scheduled) |
+| teacher_momentum_schedule | true | Use momentum scheduling |
+| gradient_clip | 3.0 | Gradient clipping (null to disable) |
+| gradient_accumulation_steps | 1 | Accumulate gradients for larger effective batch |
+| seed | 42 | Random seed |
+| device | cuda | Device to use (cuda, cpu) |
+
 ```yaml
-training:
-  num_epochs: 100             # Total epochs
-  teacher_momentum: 0.996     # EMA momentum for teacher
-  teacher_momentum_final: 1.0 # Final momentum (if scheduled)
-  teacher_momentum_schedule: true # Use momentum scheduling
-  gradient_clip: 3.0          # Gradient clipping (null to disable)
-  gradient_accumulation_steps: 1  # Accumulate gradients for larger effective batch
-  mixed_precision: false      # Use mixed precision training (experimental)
-  seed: 42                    # Random seed
-  device: cuda                # Device to use (cuda, cpu)
+training_config:
+  num_epochs: 100
+  teacher_momentum: 0.996
+  teacher_momentum_final: 1.0
+  teacher_momentum_schedule: true
+  gradient_clip: 3.0
+  gradient_accumulation_steps: 1
+  seed: 42
+  device: cuda
+
 ```
 
 ### CheckpointConfig
 
+| Field | Exemple | Description |
+| --- | --- | --- |
+| checkpoint_dir | ./checkpoints | Checkpoint directory |
+| save_every_n_epochs | 1 | Save every N epochs |
+| resume_from | null | Path to checkpoint to resume from |
+
 ```yaml
-checkpoint:
-  checkpoint_dir: ./checkpoints   # Checkpoint directory
-  save_every_n_epochs: 1          # Save every N epochs
-  save_every_n_iters: null        # Save every N iterations (optional)
-  keep_last_n: 5                  # Number of checkpoints to keep
-  save_best: true                 # Keep best checkpoint
-  resume_from: null               # Path to checkpoint to resume from
+checkpoint_config:
+  checkpoint_dir: ./checkpoints
+  save_every_n_epochs: 1
+  resume_from: null
+
 ```
 
 ### LoggingConfig
 
-```yaml
-logging:
-  log_dir: ./logs             # Log directory
-  log_every_n_iters: 10       # Log every N iterations
-  log_verbosity: info         # Logging level (debug, info, warning, error)
-
-  # Weights & Biases integration
-  use_wandb: false            # Enable W&B experiment tracking
-  wandb_project: null         # W&B project name
-  wandb_entity: null          # W&B entity (username or team)
-  wandb_run_name: null        # Custom run name (optional)
-```
-
----
-
-## Complete Example
+| Field | Exemple | Description |
+| --- | --- | --- |
+| log_dir | ./logs | Log directory |
+| log_every_n_iters | 10 | Log every N iterations |
+| log_verbosity | info | Logging level (debug, info, warning, error) |
+| use_wandb | false | Enable W&B experiment tracking |
+| wandb_project | null | W&B project name |
+| wandb_entity | null | W&B entity (username or team) |
+| wandb_run_name | null | Custom run name (optional) |
 
 ```yaml
-# configs/imagenet100.yaml
-data:
-  dataset: imagenet100
-  data_path: ./data/imagenet100
-  batch_size: 64
-  num_workers: 8
-  pin_memory: true
-  train_split: 0.85
-  val_split: 0.15
-  seed: 42
-
-augmentation:
-  n_global_crops: 2
-  num_local_views: 6
-  global_crop_size: 224
-  local_crop_size: 96
-
-model:
-  backbone: resnet50
-  backbone_pretrained: false
-  projection_output_dim: 2048
-
-loss:
-  student_temp: 0.1
-  teacher_temp: 0.04
-  center_momentum: 0.9
-
-optimizer:
-  optimizer: adamw
-  lr: 0.0005
-  weight_decay: 0.04
-
-scheduler:
-  scheduler: cosine_warmup
-  warmup_epochs: 10
-  min_lr: 1.0e-6
-
-training:
-  num_epochs: 200
-  teacher_momentum: 0.996
-  teacher_momentum_schedule: true
-  teacher_momentum_final: 1.0
-  gradient_clip: 3.0
-  gradient_accumulation_steps: 1
-  seed: 42
-
-checkpoint:
-  checkpoint_dir: ./checkpoints
-  save_every_n_epochs: 10
-  save_best: true
-
-logging:
+logging_config:
   log_dir: ./logs
-  log_every_n_iters: 50
+  log_every_n_iters: 10
   log_verbosity: info
   use_wandb: false
-```
+  wandb_project: null
+  wandb_entity: null
+  wandb_run_name: null
+
 
 ---
 
@@ -272,50 +291,25 @@ For training on Kaggle, use the specialized configuration files:
 
 ```yaml
 # configs/kaggle-imagenet100.yaml
-data:
+data_config:
   dataset: imagenet100
   data_path: /kaggle/input/imagenet100
   batch_size: 32
   num_workers: 2
 
-training:
+training_config:
   gradient_accumulation_steps: 2  # Simulate larger batch size
 
-checkpoint:
+checkpoint_config:
   checkpoint_dir: /kaggle/working/checkpoints
 
-logging:
+logging_config:
   log_dir: /kaggle/working/logs
   use_wandb: true
   wandb_project: dino-training
 ```
 
 See [Kaggle Training](#kaggle-training) for more details.
-
----
-
-## Validation
-
-Configuration is validated at multiple levels:
-
-1. **Type checking**: Dataclass enforces types
-2. **Value checking**: In `__post_init__` methods
-3. **Runtime checking**: In component constructors
-
-Example validation:
-
-```python
-@dataclass
-class LossConfig:
-    student_temp: float = 0.1
-    teacher_temp: float = 0.04
-
-    def __post_init__(self):
-        if self.student_temp <= 0:
-            raise ValueError("Temperature must be positive")
-        if self.student_temp <= self.teacher_temp:
-            warnings.warn("Student temp should be > teacher temp")
-```
 
 ---
 

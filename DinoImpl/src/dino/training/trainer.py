@@ -3,15 +3,17 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from typing import Optional, Dict, Union
+from typing import Optional, Dict
 import logging
 from tqdm import tqdm
+from torch.optim.lr_scheduler import LRScheduler
 
 from ..utils.ema import update_teacher_EMA, get_momentum_schedule
 from ..utils.checkpoint import save_checkpoint, load_checkpoint
 from ..utils.logging_utils import log_metrics
 from ..utils.history import History
 
+from ..config.config import DinoConfig
 try:
     import wandb
 except ImportError:
@@ -63,11 +65,11 @@ class DinoTrainer:
 
     def __init__(
         self,
-        config,
+        config: DinoConfig,
         student: nn.Module,
         teacher: nn.Module,
         optimizer: torch.optim.Optimizer,
-        scheduler: Optional[torch.optim.lr_scheduler.LRScheduler],
+        scheduler: Optional[LRScheduler],
         loss_fn: nn.Module,
         train_loader: DataLoader,
         val_loader: Optional[DataLoader] = None,
@@ -83,9 +85,6 @@ class DinoTrainer:
         self.val_loader = val_loader
         self.device = device
 
-        # Check if we're in streaming mode (IterableDataset doesn't have __len__)
-        self.is_streaming = not hasattr(train_loader.dataset, '__len__')
-
         # Training state
         self.current_epoch = 0
         self.current_iteration = 0
@@ -94,26 +93,16 @@ class DinoTrainer:
             'device': device,
         })
 
-        # Determine number of iterations per epoch
-        if self.is_streaming:
-            # For streaming, use config value or estimate based on ImageNet100 size
-            streaming_samples = getattr(config.data, 'streaming_train_samples', None)
-            if streaming_samples:
-                self.niter_per_epoch = streaming_samples // config.data.batch_size
-            else:
-                # Default estimate for ImageNet100: ~117k train samples
-                self.niter_per_epoch = 117000 // config.data.batch_size
-            logger.info(f"Streaming mode: estimated {self.niter_per_epoch} iterations per epoch")
-        else:
-            self.niter_per_epoch = len(train_loader)
+        
+        self.n_iter_per_epoch = len(train_loader)
 
         # EMA momentum schedule
-        if config.training.teacher_momentum_schedule:
+        if config.training_config.teacher_momentum_schedule:
             self.momentum_schedule = get_momentum_schedule(
-                base_momentum=config.training.teacher_momentum,
-                final_momentum=config.training.teacher_momentum_final,
-                num_epochs=config.training.num_epochs,
-                niter_per_epoch=self.niter_per_epoch
+                base_momentum=config.training_config.teacher_momentum,
+                final_momentum=config.training_config.teacher_momentum_final,
+                num_epochs=config.training_config.num_epochs,
+                niter_per_epoch=self.n_iter_per_epoch
             )
         else:
             self.momentum_schedule = None
@@ -138,17 +127,19 @@ class DinoTrainer:
         self.student.train()
         self.teacher.eval()
 
+        accumulation_steps = self.config.training_config.gradient_accumulation_steps
+        num_batches = len(self.train_loader)
+
         epoch_loss = 0.0
-        num_batches = self.niter_per_epoch if self.is_streaming else len(self.train_loader)
+        last_momentum = self._get_momentum()
 
-        accumulation_steps = self.config.training.gradient_accumulation_steps
 
-        # Progress bar (with total if known, otherwise streaming mode)
+        # Progress bar 
         pbar = tqdm(
             self.train_loader,
-            desc=f"Epoch {epoch}/{self.config.training.num_epochs}",
+            desc=f"Epoch {epoch}/{self.config.training_config.num_epochs}",
             leave=True,
-            total=num_batches if not self.is_streaming else None
+            total=num_batches,
         )
 
         self.optimizer.zero_grad()
@@ -162,139 +153,48 @@ class DinoTrainer:
 
             # Forward pass - teacher only sees global views
             with torch.no_grad():
-                teacher_outputs = [self.teacher(v) for v in global_views]
-                teacher_output = torch.cat(teacher_outputs, dim=0)
+                teacher_output = torch.cat([self.teacher(v) for v in global_views], dim=0)
 
             # Forward pass - student sees all views
-            student_outputs = [self.student(v) for v in all_views]
-            student_output = torch.cat(student_outputs, dim=0)
+            student_output = torch.cat([self.student(v) for v in all_views], dim=0)
 
             # Compute loss
             loss = self.loss_fn(student_output, teacher_output)
+            true_loss = loss.item()
+            epoch_loss += true_loss
 
-            loss = loss / accumulation_steps
-
-            # Backward pass
-            loss.backward()
+            (loss / accumulation_steps).backward()
 
             epoch_loss += loss.item()
 
-            if (batch_idx + 1) % accumulation_steps == 0:
-                # Gradient clipping
-                if self.config.training.gradient_clip is not None:
-                    torch.nn.utils.clip_grad_norm_(
-                        self.student.parameters(),
-                        self.config.training.gradient_clip
-                    )
+            is_accumulation_step = (batch_idx + 1) % accumulation_steps == 0
+            is_last_batch = (batch_idx + 1) == num_batches
 
-                # Optimizer step - train student
-                self.optimizer.step()
-
-                # Reset gradients après la mise à jour
-                self.optimizer.zero_grad()
-
-                # Learning rate scheduler step
-                if self.scheduler is not None:
-                    self.scheduler.step()
-
-                # EMA update for teacher
-                if self.momentum_schedule is not None:
-                    momentum = self.momentum_schedule[self.current_iteration]
-                else:
-                    momentum = self.config.training.teacher_momentum
-
-                update_teacher_EMA(self.student, self.teacher, alpha=momentum)
-
-                # Record iteration metrics (seulement lors des vraies updates)
-                current_lr = self.optimizer.param_groups[0]['lr']
-                self.history.record_iteration(
-                    iteration=self.current_iteration,
-                    metrics={
-                        'loss': loss.item(),
-                        'learning_rate': current_lr,
-                        'momentum': momentum
-                    }
-                )
-                self.current_iteration += 1
-
-                # wandb iteration-level logging
-                if wandb is not None and wandb.run is not None:
-                    wandb.log({
-                        "iteration": self.current_iteration,
-                        "train/loss": loss.item(),
-                        "train/lr": current_lr,
-                        "train/momentum": momentum,
-                    })
-
-            # Update progress bar
-            if self.momentum_schedule is not None:
-                momentum = self.momentum_schedule[min(self.current_iteration, len(self.momentum_schedule) - 1)]
-            else:
-                momentum = self.config.training.teacher_momentum
-            pbar.set_postfix({'loss': f"{loss.item():.4f}", 'momentum': f"{momentum:.4f}"})
+            if is_accumulation_step or is_last_batch:
+                last_momentum = self._optimizer_step(true_loss)
 
 
-             # Log periodically
-            if (batch_idx + 1) % self.config.logging.log_every_n_iters == 0:
-                progress_str = f"{batch_idx+1}" if self.is_streaming else f"{batch_idx+1}/{num_batches}"
-                logger.info(
-                    f"Epoch {epoch} [{progress_str}] "
-                    f"Loss: {loss.item():.4f}, "
-                    f"Momentum: {momentum:.4f}"
-                )
-                logger.debug(f"Loss infos: {self.loss_fn}")
-                
-                c = self.loss_fn.get_center()
+            
 
-                # 1. Format the first 5 elements for a quick preview
-                preview = ", ".join([f"{x:.4f}" for x in c.flatten()[:10].tolist()])
+            
+            
+            pbar.set_postfix({
+                "loss": f"{true_loss:.4f}",
+                "momentum": f"{last_momentum:.4f}",
+            })
 
-                # 2. Log everything in one structured message
-                logger.debug(
-                    f"Center {list(c.shape)} | "
-                    f"Norm: {c.norm():.4f} | "
-                    f"μ: {c.mean():.4f} ± {c.std():.4f} | "
-                    f"Range: [{c.min():.4f}, {c.max():.4f}] | "
-                    f"Data: [{preview}, ...]"
-                )
 
-                logger.debug(f"Gradient norms:")
-                for name, param in self.student.named_parameters():
-                    if param.requires_grad and param.grad is not None:
-                        grad_norm = param.grad.data.norm(2).item()
-                        logger.debug(f"  {name}: {grad_norm:.4f}")
-
-        if (batch_idx + 1) % accumulation_steps != 0:
-            if self.config.training.gradient_clip is not None:
-                torch.nn.utils.clip_grad_norm_(
-                    self.student.parameters(),
-                    self.config.training.gradient_clip
-                )
-
-            self.optimizer.step()
-            self.optimizer.zero_grad()
-
-            if self.scheduler is not None:
-                self.scheduler.step()
-
-            if self.momentum_schedule is not None:
-                momentum = self.momentum_schedule[self.current_iteration]
-            else:
-                momentum = self.config.training.teacher_momentum
-
-            update_teacher_EMA(self.student, self.teacher, alpha=momentum)
-            self.current_iteration += 1
-
-        # Compute epoch metrics (use actual batch count for streaming)
-        actual_batches = batch_idx + 1
-        avg_loss = epoch_loss / actual_batches
-        metrics = {
-            'loss': avg_loss,
-            'learning_rate': self.optimizer.param_groups[0]['lr'],
-            'momentum': momentum if self.momentum_schedule else self.config.training.teacher_momentum
+            # Log periodically
+            if (batch_idx + 1) % self.config.logging_config.log_every_n_iters == 0:
+                self._log_batch(epoch, batch_idx, num_batches, true_loss, last_momentum)
+           
+        # Compute epoch metrics
+        avg_loss = epoch_loss / num_batches
+        return {
+            "loss": avg_loss,
+            "learning_rate": self.optimizer.param_groups[0]["lr"],
+            "momentum": last_momentum,
         }
-
-        return metrics
 
     def train(self, num_epochs: Optional[int] = None):
         """
@@ -304,10 +204,10 @@ class DinoTrainer:
             num_epochs: Number of epochs to train (uses config if not specified)
         """
         if num_epochs is None:
-            num_epochs = self.config.training.num_epochs
+            num_epochs = self.config.training_config.num_epochs
 
         logger.info(f"Starting training for {num_epochs} epochs")
-        logger.info(f"Checkpoint directory: {self.config.checkpoint.checkpoint_dir}")
+        logger.info(f"Checkpoint directory: {self.config.checkpoint_config.checkpoint_dir}")
 
         for epoch in range(self.current_epoch + 1, self.current_epoch + num_epochs + 1):
             # Train for one epoch
@@ -329,7 +229,7 @@ class DinoTrainer:
                 })
 
             # Save checkpoint
-            if epoch % self.config.checkpoint.save_every_n_epochs == 0:
+            if epoch % self.config.checkpoint_config.save_every_n_epochs == 0:
                 wandb_run_id = None
                 if wandb is not None and wandb.run is not None:
                     wandb_run_id = wandb.run.id
@@ -343,7 +243,7 @@ class DinoTrainer:
                     iteration=self.current_iteration,
                     config=self.config,
                     metrics=metrics,
-                    checkpoint_dir=self.config.checkpoint.checkpoint_dir,
+                    checkpoint_dir=self.config.checkpoint_config.checkpoint_dir,
                     history=self.history,
                     wandb_run_id=wandb_run_id,
                     scheduler=self.scheduler
@@ -390,3 +290,82 @@ class DinoTrainer:
         self.resumed_wandb_run_id = checkpoint_info.get('wandb_run_id')
 
         logger.info(f"Resumed from epoch {self.current_epoch}, iteration {self.current_iteration}")
+
+
+
+    def _get_momentum(self) -> float:
+        """Return the momentum value for the current iteration."""
+        if self.momentum_schedule is not None:
+            idx = min(self.current_iteration, len(self.momentum_schedule) - 1)
+            return self.momentum_schedule[idx]
+        return self.config.training_config.teacher_momentum
+
+    def _optimizer_step(self, true_loss: float) -> float:
+        """
+        Perform a full optimizer step:
+          clip -> step -> zero_grad -> scheduler -> EMA update -> log metrics.
+
+        Returns:
+            The momentum value used for the EMA update.
+        """
+        if self.config.training_config.gradient_clip is not None:
+            torch.nn.utils.clip_grad_norm_(
+                self.student.parameters(),
+                self.config.training_config.gradient_clip,
+            )
+
+        self.optimizer.step()
+        self.optimizer.zero_grad()
+
+        if self.scheduler is not None:
+            self.scheduler.step()
+
+        momentum = self._get_momentum()
+        update_teacher_EMA(self.student, self.teacher, alpha=momentum)
+
+        current_lr = self.optimizer.param_groups[0]["lr"]
+        self.history.record_iteration(
+            iteration=self.current_iteration,
+            metrics={"loss": true_loss, "learning_rate": current_lr, "momentum": momentum},
+        )
+
+        if wandb is not None and wandb.run is not None:
+            wandb.log({
+                "iteration": self.current_iteration,
+                "train/loss": true_loss,
+                "train/lr": current_lr,
+                "train/momentum": momentum,
+            })
+
+        self.current_iteration += 1
+        return momentum
+
+    def _log_batch(
+        self,
+        epoch: int,
+        batch_idx: int,
+        num_batches: int,
+        true_loss: float,
+        momentum: float,
+    ) -> None:
+        """Log per-batch diagnostics (center stats, gradient norms)."""
+        logger.info(
+            f"Epoch {epoch} [{batch_idx + 1}/{num_batches}] "
+            f"Loss: {true_loss:.4f}, Momentum: {momentum:.4f}"
+        )
+        logger.debug(f"Loss infos: {self.loss_fn}")
+
+        c = self.loss_fn.get_center()
+        preview = ", ".join(f"{x:.4f}" for x in c.flatten()[:10].tolist())
+        logger.debug(
+            f"Center {list(c.shape)} | "
+            f"Norm: {c.norm():.4f} | "
+            f"μ: {c.mean():.4f} ± {c.std():.4f} | "
+            f"Range: [{c.min():.4f}, {c.max():.4f}] | "
+            f"Data: [{preview}, ...]"
+        )
+
+        logger.debug("Gradient norms:")
+        for name, param in self.student.named_parameters():
+            if param.requires_grad and param.grad is not None:
+                logger.debug(f"  {name}: {param.grad.data.norm(2).item():.4f}")

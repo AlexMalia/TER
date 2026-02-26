@@ -296,12 +296,6 @@ training:
   # Recommended: 3.0
   gradient_clip: 3.0
 
-  # Use automatic mixed precision (FP16) for faster training
-  # Requires GPU with Tensor Cores (V100, A100, RTX 20xx+)
-  # Type: bool
-  # Recommended: false (can cause instability)
-  mixed_precision: false
-
   # Random seed for training reproducibility
   # Type: int
   seed: 42
@@ -325,17 +319,6 @@ checkpoint:
   # Type: int
   # Recommended: 1-10 depending on dataset size
   save_every_n_epochs: 1
-
-  # Save checkpoint every N iterations (overrides epoch-based saving if set)
-  # Set to null to use epoch-based saving only
-  # Type: int or null
-  save_every_n_iters: null
-
-  # Keep only the last N checkpoints (delete older ones)
-  # Set to -1 to keep all checkpoints
-  # Type: int
-  # Recommended: 3-5 (saves disk space)
-  keep_last_n: 5
 
   # Save best checkpoint based on validation loss
   # Type: bool

@@ -1,27 +1,8 @@
 #!/usr/bin/env python3
-"""
-DINO Training Script
-
-Train a DINO model for self-supervised learning.
-
-Example usage:
-    # Train with default config
-    python scripts/train.py
-
-    # Train with custom config
-    python scripts/train.py --config configs/cifar100.yaml
-
-    # Override specific parameters
-    python scripts/train.py --config configs/imagenette.yaml --batch-size 64 --epochs 200
-
-    # Resume from checkpoint
-    python scripts/train.py --resume checkpoints/checkpoint_latest.pth
-"""
-
 import argparse
 import sys
 from pathlib import Path
-
+import numpy as np
 import torch
 
 # Add src to path
@@ -39,7 +20,6 @@ import logging
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Train DINO model",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
     # Configuration
@@ -57,68 +37,38 @@ def parse_args():
     )
 
     # Override data config
-    parser.add_argument("--dataset", type=str, help="Dataset name")
-    parser.add_argument("--data-path", type=str, help="Path to data")
-    parser.add_argument("--batch-size", type=int, help="Batch size")
-    parser.add_argument("--num-workers", type=int, help="Number of data loading workers")
+    parser.add_argument("--dataset", type=str, help=f"Dataset name")
+    parser.add_argument("--data-path", type=str, help=f"Path to data")
+    parser.add_argument("--batch-size", type=int, help=f"Batch size")
+    parser.add_argument("--num-workers", type=int, help=f"Number of data loading workers")
 
     # Override model config
-    parser.add_argument("--backbone", type=str, help="Backbone architecture")
-    parser.add_argument("--output-dim", type=int, help="Projection output dimension")
+    parser.add_argument("--backbone", type=str, help=f"Backbone architecture")
+    parser.add_argument("--output-dim", type=int, help=f"Projection output dimension")
 
     # Override training config
-    parser.add_argument("--epochs", type=int, help="Number of epochs")
-    parser.add_argument("--lr", type=float, help="Learning rate")
+    parser.add_argument("--epochs", type=int, help=f"Number of epochs")
+    parser.add_argument("--lr", type=float, help=f"Learning rate")
 
     # Logging and checkpointing
-    parser.add_argument("--checkpoint-dir", type=str, help="Checkpoint directory")
-    parser.add_argument("--log-dir", type=str, help="Log directory")
-    parser.add_argument("--log-verbosity", type=str, help="Logging verbosity level")
+    parser.add_argument("--checkpoint-dir", type=str, help=f"Checkpoint directory")
+    parser.add_argument("--log-dir", type=str, help=f"Log directory")
+    parser.add_argument("--log-verbosity", type=str, help=f"Logging verbosity level")
 
     # Other
-    parser.add_argument("--seed", type=int, help="Random seed")
-    parser.add_argument("--device", type=str, default="cuda", help="Device to use")
+    parser.add_argument("--seed", type=int, help=f"Random seed")
+    parser.add_argument("--device", type=str, default="cuda", help="Device to use (default: cuda if available, else cpu)")
 
     return parser.parse_args()
-
 
 def main():
     args = parse_args()
 
     # Load configuration
-    config = DinoConfig.from_yaml(args.config)
-
-    # Override config with command-line arguments
-    if args.dataset:
-        config.data.dataset = args.dataset
-    if args.batch_size:
-        config.data.batch_size = args.batch_size
-    if args.num_workers:
-        config.data.num_workers = args.num_workers
-    if args.data_path:
-        config.data.data_path = args.data_path
-    if args.backbone:
-        config.model.backbone = args.backbone
-    if args.output_dim:
-        config.model.projection_output_dim = args.output_dim
-    if args.epochs:
-        config.training.num_epochs = args.epochs
-    if args.lr:
-        config.optimizer.lr = args.lr
-    if args.checkpoint_dir:
-        config.checkpoint.checkpoint_dir = args.checkpoint_dir
-    if args.log_dir:
-        config.logging.log_dir = args.log_dir
-    if args.log_verbosity:
-        config.logging.log_verbosity = args.log_verbosity
-    if args.seed:
-        config.training.seed = args.seed
-        config.data.seed = args.seed
-    if args.resume:
-        config.checkpoint.resume_from = args.resume
+    config = DinoConfig.from_yaml_and_args(args.config, args)  # Load config from YAML and override with command-line arguments
 
     # Setup logging
-    setup_logging(config.logging.log_dir, config.logging.log_verbosity)
+    setup_logging(config.logging_config.log_dir, config.logging_config.log_verbosity)
     logger = logging.getLogger(__name__)
     torch.set_printoptions(profile="full", linewidth=200)
     logger.info("Starting DINO training script")
@@ -126,25 +76,27 @@ def main():
     
     # Determine device
     device = args.device if torch.cuda.is_available() else "cpu"
-    config.training.device = device
+    config.training_config.device = device
 
     logger.info(f"Using device: {device}")
     logger.info(f"Configuration:\n{config}")
 
     # Set random seed
-    torch.manual_seed(config.training.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(config.training.seed)
+    if config.training_config.seed:
+        torch.manual_seed(config.training_config.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(config.training_config.seed)
+        np.random.seed(config.training_config.seed)
 
     # Create dataloaders
     logger.info("Creating dataloaders...")
-    train_loader, val_loader, _ = create_dataloaders(config)
+    train_loader, val_loader, _ = create_dataloaders(config.data_config, config.augmentation_config)
     logger.info(f"Created dataloaders: {len(train_loader)} train batches")
 
     # Create models
     logger.info("Creating models...")
-    student = DinoModel.from_config(config)
-    teacher = DinoModel.from_config(config)
+    student = DinoModel.from_config(config.model_config)
+    teacher = DinoModel.from_config(config.model_config)
 
     # Teacher is a perfect copy of student at initialization
     teacher.load_state_dict(student.state_dict())
@@ -159,26 +111,26 @@ def main():
 
     # Create loss function
     dino_loss = DinoLoss.from_config(
-        config.loss,
-        config.augmentation,
+        config.loss_config,
+        config.augmentation_config,
         out_dim=student.output_dim
     )
 
-    # Create optimizer and scheduler
-    optimizer = create_optimizer(student.parameters(), config.optimizer)
+    # Create optimizer and its scheduler
+    optimizer = create_optimizer(student.parameters(), config.optimizer_config)
 
-    accumulation_steps = config.training.gradient_accumulation_steps
+    accumulation_steps = config.training_config.gradient_accumulation_steps
 
     # Nombre de vraies updates par epoch (pas le nombre de forward passes)
     updates_per_epoch = len(train_loader) // accumulation_steps
 
-    total_steps = config.training.num_epochs * updates_per_epoch
-    warmup_steps = config.scheduler.warmup_epochs * updates_per_epoch
+    total_steps = config.training_config.num_epochs * updates_per_epoch
+    warmup_steps = config.scheduler_config.warmup_epochs * updates_per_epoch
 
-    scheduler = create_scheduler(
+    optim_scheduler = create_scheduler(
         optimizer,
-        config.scheduler,
-        config.optimizer,
+        config.scheduler_config,
+        config.optimizer_config,
         total_steps,
         warmup_steps
     )
@@ -194,7 +146,7 @@ def main():
         student=student,
         teacher=teacher,
         optimizer=optimizer,
-        scheduler=scheduler,
+        scheduler=optim_scheduler,
         loss_fn=dino_loss,
         train_loader=train_loader,
         val_loader=val_loader,
@@ -202,18 +154,18 @@ def main():
     )
 
     # Resume from checkpoint if specified
-    if config.checkpoint.resume_from:
-        logger.info(f"Resuming from checkpoint: {config.checkpoint.resume_from}")
-        trainer.resume_from_checkpoint(config.checkpoint.resume_from)
+    if config.checkpoint_config.resume_from:
+        logger.info(f"Resuming from checkpoint: {config.checkpoint_config.resume_from}")
+        trainer.resume_from_checkpoint(config.checkpoint_config.resume_from)
     elif args.resume:
         # Try to find latest checkpoint
-        latest_checkpoint = find_latest_checkpoint(config.checkpoint.checkpoint_dir)
+        latest_checkpoint = find_latest_checkpoint(config.checkpoint_config.checkpoint_dir)
         if latest_checkpoint:
             logger.info(f"Found checkpoint: {latest_checkpoint}")
             trainer.resume_from_checkpoint(str(latest_checkpoint))
 
     # --- wandb setup ---
-    if config.logging.use_wandb:
+    if config.logging_config.use_wandb:
         try:
             import wandb
 
@@ -223,14 +175,14 @@ def main():
                 wandb_run_id = wandb.util.generate_id()
 
             wandb.init(
-                project=config.logging.wandb_project or "dino-training",
-                entity=config.logging.wandb_entity,
-                name=config.logging.wandb_run_name,
+                project=config.logging_config.wandb_project or "dino-training",
+                entity=config.logging_config.wandb_entity,
+                name=config.logging_config.wandb_run_name,
                 id=wandb_run_id,
                 resume="allow",
                 config=config.to_dict(),
                 save_code=True,
-                tags=[config.model.backbone, config.data.dataset],
+                tags=[config.model_config.backbone, config.data_config.dataset],
             )
 
             # Define metric axes so iteration and epoch charts are separate
@@ -248,7 +200,7 @@ def main():
 
         except ImportError:
             logger.warning("wandb not installed. pip install wandb to enable.")
-            config.logging.use_wandb = False
+            config.logging_config.use_wandb = False
 
     # Train
     logger.info("=" * 80)
@@ -263,7 +215,7 @@ def main():
         logger.error(f"Training failed with error: {e}", exc_info=True)
         raise
     finally:
-        if config.logging.use_wandb:
+        if config.logging_config.use_wandb:
             try:
                 import wandb
                 wandb.finish()
