@@ -174,36 +174,52 @@ model:
 
 | Field | Exemple | Description |
 |--------|------|-------------|
-| student_temp | 0.1 | |
-| teacher_temp | 0.04 | |
-| center_momentum | 0.9 | |
+| student_temp | 0.1 | softmax temperature for student (higher = softer)|
+| teacher_temp | 0.04 | softmax temperature for teacher (lower = sharper) |
+| center_momentum | 0.9 | teacher centering EMA momentum |
 
 
 ```yaml
 loss:
-  student_temp: 0.1           # Student temperature (higher = softer)
-  teacher_temp: 0.04          # Teacher temperature (lower = sharper)
-  center_momentum: 0.9        # EMA momentum for centering
+  student_temp: 0.1
+  teacher_temp: 0.04
+  center_momentum: 0.9 
 ```
 
 ### OptimizerConfig
 
+| Field | Exemple | Description |
+|--------|------|-------------|
+| optimizer | adamw | optimizer Algorithm |
+| lr | 0.001 | learning rate (must scale linearly with batch size) |
+| weight_decay | 0.04 | Weight decay penalization |
+| betas |  [0.9, 0.999] | Adam betas |
+
+
 ```yaml
 optimizer:
-  optimizer: adamw            # Optimizer type
-  lr: 0.001                   # Learning rate
-  weight_decay: 0.04          # Weight decay
-  betas: [0.9, 0.999]         # Adam betas
+  optimizer: adamw
+  lr: 0.001 
+  weight_decay: 0.04  
+  betas: [0.9, 0.999] 
 ```
 
 ### SchedulerConfig
 
+| Field | Exemple | Description |
+|--------|------|-------------|
+| scheduler | cosine_warmup | Scheduler type |
+| warmup_epochs | 10 | Number of warmup epoch |
+| min_lr | 1.0e-6 | Minimum lr after decay |
+| warmup_start_lr |  0.0 | Starting LR for warmup scaling up during warmup |
+
+
 ```yaml
 scheduler:
-  scheduler: cosine_warmup    # Scheduler type (cosine_warmup)
-  warmup_epochs: 10           # Number of warmup epochs
-  min_lr: 1.0e-6              # Minimum learning rate after decay
-  warmup_start_lr: 0.0        # Starting LR for warmup (ramps up to optimizer.lr)
+  scheduler: cosine_warmup
+  warmup_epochs: 10
+  min_lr: 1.0e-6
+  warmup_start_lr: 0.0 
 ```
 
 ### TrainingConfig
