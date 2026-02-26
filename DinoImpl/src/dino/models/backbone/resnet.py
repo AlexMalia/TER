@@ -1,9 +1,12 @@
 
+import logging
+
 from .backbone import BackboneBase
 from torchvision import models
 import torch
 import torch.nn as nn
 
+logger = logging.getLogger(__name__)
 
 class ResnetBackboneDino(BackboneBase):
     """
@@ -41,6 +44,9 @@ class ResnetBackboneDino(BackboneBase):
         model.fc = nn.Identity()
         self.model = model
         self.variant = variant
+
+        logger.info(f"Initialized {variant} backbone with output_dim={self.output_dim}, pretrained={pretrained}")
+
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

@@ -5,10 +5,11 @@ from __future__ import annotations
 import torch
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
-from typing import Iterator, TYPE_CHECKING
+from typing import Iterator
+from dino.utils.schedule import cosine_scheduler
 
-if TYPE_CHECKING:
-    from dino.config import OptimizerConfig, SchedulerConfig
+
+from dino.config import OptimizerConfig, SchedulerConfig
 
 
 def create_optimizer(
@@ -130,3 +131,11 @@ def create_scheduler(
             f"Unknown scheduler: {scheduler_config.scheduler}. "
             f"Available: cosine_warmup, cosine, linear, constant"
         )
+
+def get_wd_schedule(
+     base_wd: float,
+     final_wd: float,
+     num_epochs: int,
+     niter_per_epoch: int
+ ) -> list:
+     return list(cosine_scheduler(base_wd, final_wd, num_epochs, niter_per_epoch))

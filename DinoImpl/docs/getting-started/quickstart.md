@@ -1,6 +1,6 @@
 # Quick Start
 
-Get up and running with DINO in 5 minutes.
+Get up and running with DINO.
 
 ---
 
@@ -9,25 +9,11 @@ Get up and running with DINO in 5 minutes.
 ### Basic Training
 
 ```bash
-# Train on ImageNette (default dataset)
-python scripts/train.py
+# Train on default config
+uv run scripts/train.py
 ```
 
-That's it! Your model will train and save checkpoints to `./checkpoints/`.
-
-### Training with Different Datasets
-
-```bash
-# Train on ImageNet100
-python scripts/train.py --config configs/imagenet100.yaml
-```
-
-### Custom Settings
-
-```bash
-# Override specific parameters
-python scripts/train.py --epochs 100 --batch-size 64 --lr 0.001
-```
+That's it! Your model will train and save checkpoints to `./output/checkpoints/`.
 
 ---
 
@@ -36,23 +22,27 @@ python scripts/train.py --epochs 100 --batch-size 64 --lr 0.001
 ### With Configuration File
 
 ```bash
-python scripts/train.py --config configs/default.yaml
+uv run scripts/train.py --config configs/default.yaml
 ```
 
 ### Override Parameters
 
+Parameters will override the settings set in your YAML configuration file.
+
 ```bash
-python scripts/train.py \
+uv run scripts/train.py \
     --config configs/imagenet100.yaml \
     --batch-size 64 \
     --epochs 200 \
     --lr 0.0005
 ```
 
+Check the [Configuration](../guides/configuration.md) guide for more details.
+
 ### Resume from Checkpoint
 
 ```bash
-python scripts/train.py --resume checkpoints/checkpoint_latest.pth
+uv run scripts/train.py --resume <checkpoint-path>
 ```
 
 ---
@@ -69,24 +59,29 @@ from dino.training import DinoTrainer, create_optimizer, create_scheduler
 from dino.data import create_dataloaders
 
 # Load configuration
-config = DinoConfig.from_yaml('configs/default.yaml')
+config = DinoConfig.from_yaml_and_args('configs/default.yaml', args)
 
 # Create components using factory methods
-train_loader, val_loader, _ = create_dataloaders(config)
-student = DinoModel.from_config(config)
-teacher = DinoModel.from_config(config)
+train_loader, val_loader, _ = create_dataloaders(config.data_config, config.augmentation_config)
+student = DinoModel.from_config(config.model_config)
+teacher = DinoModel.from_config(config.model_config)
+
 teacher.load_state_dict(student.state_dict())
 
 # Create loss and optimizer
-loss_fn = DinoLoss.from_config(config.loss, config.augmentation, out_dim=student.output_dim)
-optimizer = create_optimizer(student.parameters(), config.optimizer)
+dino_loss = DinoLoss.from_config(
+    config.loss_config,
+    config.augmentation_config,
+    out_dim=student.output_dim
+)
+optimizer = create_optimizer(student.parameters(), config.optimizer_config)
 
 # Create scheduler (accounts for gradient accumulation)
 accumulation_steps = config.training.gradient_accumulation_steps
 updates_per_epoch = len(train_loader) // accumulation_steps
 total_steps = config.training.num_epochs * updates_per_epoch
 warmup_steps = config.scheduler.warmup_epochs * updates_per_epoch
-scheduler = create_scheduler(optimizer, config.scheduler, config.optimizer, total_steps, warmup_steps)
+scheduler = create_scheduler(optimizer, config.scheduler_config, config.optimizer_config, total_steps, warmup_steps)
 
 # Train
 trainer = DinoTrainer(
@@ -100,21 +95,6 @@ trainer = DinoTrainer(
 )
 trainer.train()
 ```
-
-### Manual Component Creation
-
-For more control over the components:
-
-```python
-from dino.models import get_backbone, DinoProjectionHead, DinoModel
-
-# Create components manually
-backbone = get_backbone('resnet18')
-projection = DinoProjectionHead(input_dim=512, output_dim=2048)
-student = DinoModel(backbone, projection)
-```
-
----
 
 ## Monitoring Training
 
@@ -138,24 +118,12 @@ wandb login
 python scripts/train.py --config configs/default.yaml
 ```
 
-Or set in your config:
+in your config you need atleast:
 
 ```yaml
 logging:
   use_wandb: true
   wandb_project: dino-training
-```
-
-### TensorBoard
-
-```bash
-tensorboard --logdir logs/
-```
-
-### Check Checkpoints
-
-```bash
-ls -lh checkpoints/
 ```
 
 ---

@@ -29,31 +29,11 @@ checkpoint = {
     'dino_loss_center': Tensor,      # Loss centering buffer
     'config': dict,                  # Training configuration
     'metrics': dict,                 # Training metrics
-    'history': History,              # Training history (loss, lr, momentum)
-    'wandb_run_id': str,             # W&B run ID for resumption (if enabled)
     'timestamp': str                 # Save time
+    'wandb_run_id': Optional[str],   # W&B run ID for resumption (if enabled)
+    'history': Optional[History],    # Training history instance
 }
 ```
-
-### Why Save the Loss Center?
-
-The DINO loss maintains a running center via EMA. This center is critical for:
-
-- Stable loss computation
-- Preventing collapse
-- Consistent training resumption
-
-Losing the center would break loss computation when resuming.
-
-### Why Save the Scheduler State?
-
-The learning rate scheduler maintains internal state (current step, etc.). Saving and restoring it ensures:
-
-- Correct learning rate on resume
-- Proper warmup continuation
-- Consistent training dynamics
-
-**Note:** On resume, the scheduler is fast-forwarded to the correct iteration to avoid known issues with `SequentialLR.load_state_dict()`.
 
 ### Why Save the W&B Run ID?
 
@@ -70,18 +50,19 @@ If you're using Weights & Biases for experiment tracking, the `wandb_run_id` all
 Checkpoints are saved automatically during training:
 
 ```yaml
-checkpoint:
-  save_dir: ./checkpoints     # Where to save
-  save_freq: 10               # Save every N epochs
-  save_latest: true           # Keep checkpoint_latest.pth
-  save_best: true             # Keep checkpoint_best.pth
+checkpoint_config:
+  checkpoint_dir: ./checkpoints/imagenette/vits16
+  save_every_n_epochs: 1
+  save_best: true
+  resume_from: null
 ```
+
+voir [Configuration Guide](configuration.md#checkpoint_config) for details.
 
 ### Files Created
 
 - `checkpoint_epoch_XXXX.pth` - Checkpoint for specific epoch
 - `checkpoint_latest.pth` - Most recent checkpoint
-- `checkpoint_best.pth` - Best performing checkpoint (if enabled)
 
 ---
 
@@ -187,42 +168,13 @@ with torch.no_grad():
 !!! warning "Version Compatibility"
     Checkpoints are not guaranteed to be compatible across different code versions. If you've made significant changes to model architecture, you may need to retrain from scratch.
 
-### Common Issues
-
-**Missing keys**:
-```python
-# Strict loading (fails on mismatch)
-model.load_state_dict(checkpoint['state_dict'], strict=True)
-
-# Lenient loading (ignores mismatches)
-model.load_state_dict(checkpoint['state_dict'], strict=False)
-```
-
-**Architecture changes**:
-- If you change backbone or projection dimensions, old checkpoints won't work
-- Keep track of which config was used for each checkpoint
-
 ---
 
 ## Best Practices
 
 1. **Always save config**: Include the configuration used for training
 2. **Version your checkpoints**: Use descriptive names or directories
-3. **Save both student and teacher**: Teacher often performs better for evaluation
-4. **Save regularly**: Prevent loss from crashes or interruptions
-5. **Keep best checkpoint**: Enable `save_best: true` in config
-
----
-
-## Configuration
-
-```yaml
-checkpoint:
-  save_dir: ./checkpoints     # Checkpoint directory
-  save_freq: 10               # Save every N epochs
-  save_latest: true           # Always keep latest
-  save_best: true             # Keep best performing
-```
+3. **Save regularly**: Prevent loss from crashes or interruptions
 
 ---
 

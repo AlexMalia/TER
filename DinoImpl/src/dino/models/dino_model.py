@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
-from typing import Tuple, Optional, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from dino.config import DinoConfig
+from typing import Tuple
+from dino.config import ModelConfig
 
 
 class DinoModel(nn.Module):
@@ -19,19 +17,6 @@ class DinoModel(nn.Module):
     Args:
         backbone: Backbone network (e.g., ResNet)
         projection_head: Projection head network
-
-    Example:
-    ```python
-    from dino.models.backbone import get_backbone
-    from dino.models import DinoProjectionHead
-    backbone = get_backbone('resnet18')
-    projection_head = DinoProjectionHead(input_dim=backbone.output_dim)
-    model = DinoModel(backbone, projection_head)
-    x = torch.randn(2, 3, 224, 224)
-    output = model(x)
-    print(output.shape)
-    torch.Size([2, 2048])
-    ```
     """
 
     def __init__(self, backbone: nn.Module, projection_head: nn.Module):
@@ -109,12 +94,12 @@ class DinoModel(nn.Module):
         }
 
     @classmethod
-    def from_config(cls, config: DinoConfig) -> DinoModel:
+    def from_config(cls, model_config: ModelConfig) -> DinoModel:
         """
-        Create a DinoModel from a DinoConfig.
+        Create a DinoModel from a ModelConfig.
 
         Args:
-            config: Main DINO configuration dataclass
+            model_config: Model configuration dataclass
 
         Returns:
             Configured DinoModel instance
@@ -123,11 +108,11 @@ class DinoModel(nn.Module):
         from .projection_head import DinoProjectionHead
 
         backbone = get_backbone(
-            config.model.backbone,
-            pretrained=config.model.backbone_pretrained
+            model_config.backbone,
+            pretrained=model_config.is_backbone_pretrained
         )
         projection_head = DinoProjectionHead.from_config(
-            config.model,
+            model_config,
             input_dim=backbone.output_dim
         )
         return cls(backbone, projection_head)

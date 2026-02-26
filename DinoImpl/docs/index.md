@@ -14,22 +14,6 @@ DINO teaches a neural network to recognize images **without any labels**. It wor
 
 **Result**: The network learns powerful visual features that work for many downstream tasks (classification, detection, segmentation).
 
----
-
-## Features
-
-- **Easy to use**: Train with a single command
-- **Production ready**: Clean code structure, proper logging, checkpointing
-- **Configurable**: YAML configs for all hyperparameters
-- **Extensible**: Easy to add new datasets or backbones
-- **Bug-free**: Fixed the negative loss bug from the original notebook
-- **Multiple datasets**: ImageNette and ImageNet100 included
-- **Training history**: Track and visualize loss, learning rate, and momentum
-- **W&B integration**: Experiment tracking with Weights & Biases
-- **Kaggle support**: Ready-to-use configurations for Kaggle training
-- **Gradient accumulation**: Train with larger effective batch sizes on limited GPU memory
-
----
 
 ## Quick Links
 
