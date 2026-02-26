@@ -66,7 +66,6 @@ training_config:
   gradient_accumulation_steps: 8
   seed: 42
   device: cuda
-  mixed_precision: false
 
 checkpoint_config:
   checkpoint_dir: ./checkpoints/imagenette/vits16

@@ -57,10 +57,6 @@ config = DinoConfig.from_yaml_and_args(args.config, args)
 
 ## Configuration Sections
 
-| Field | Exemple | Description |
-|--------|------|-------------|
-| | | |
-
 ### DataConfig
 
 | Field | Exemple | Description |
@@ -75,7 +71,7 @@ config = DinoConfig.from_yaml_and_args(args.config, args)
 | seed | 42 | Random seed for reproducibility (torch, numpy, dataloader) (0 act as no seed) |
 
 ```yaml
-data:
+data_config:
   dataset: imagenette
   data_path: ./data
   batch_size: 32
@@ -114,7 +110,7 @@ data:
 | **normalize_std** | [0.229, 0.224, 0.225] | Std deviation for RGB normalization (ImageNet) |
 
 ```yaml
-augmentation:
+augmentation_config:
   # Crop settings
   n_global_crops: 2
   num_local_views: 6
@@ -158,7 +154,7 @@ augmentation:
 
 
 ```yaml
-model:
+model_config:
   # Backbone
   backbone: resnet18          
   backbone_pretrained: false
@@ -180,7 +176,7 @@ model:
 
 
 ```yaml
-loss:
+loss_config:
   student_temp: 0.1
   teacher_temp: 0.04
   center_momentum: 0.9 
@@ -197,7 +193,7 @@ loss:
 
 
 ```yaml
-optimizer:
+optimizer_config:
   optimizer: adamw
   lr: 0.001 
   weight_decay: 0.04  
@@ -215,7 +211,7 @@ optimizer:
 
 
 ```yaml
-scheduler:
+scheduler_config:
   scheduler: cosine_warmup
   warmup_epochs: 10
   min_lr: 1.0e-6
@@ -224,107 +220,70 @@ scheduler:
 
 ### TrainingConfig
 
+| Field | Exemple | Description |
+| --- | --- | --- |
+| num_epochs | 100 | Total epochs |
+| teacher_momentum | 0.996 | EMA momentum for teacher |
+| teacher_momentum_final | 1.0 | Final momentum (if scheduled) |
+| teacher_momentum_schedule | true | Use momentum scheduling |
+| gradient_clip | 3.0 | Gradient clipping (null to disable) |
+| gradient_accumulation_steps | 1 | Accumulate gradients for larger effective batch |
+| seed | 42 | Random seed |
+| device | cuda | Device to use (cuda, cpu) |
+
 ```yaml
-training:
-  num_epochs: 100             # Total epochs
-  teacher_momentum: 0.996     # EMA momentum for teacher
-  teacher_momentum_final: 1.0 # Final momentum (if scheduled)
-  teacher_momentum_schedule: true # Use momentum scheduling
-  gradient_clip: 3.0          # Gradient clipping (null to disable)
-  gradient_accumulation_steps: 1  # Accumulate gradients for larger effective batch
-  mixed_precision: false      # Use mixed precision training (experimental)
-  seed: 42                    # Random seed
-  device: cuda                # Device to use (cuda, cpu)
+training_config:
+  num_epochs: 100
+  teacher_momentum: 0.996
+  teacher_momentum_final: 1.0
+  teacher_momentum_schedule: true
+  gradient_clip: 3.0
+  gradient_accumulation_steps: 1
+  seed: 42
+  device: cuda
+
 ```
 
 ### CheckpointConfig
 
+| Field | Exemple | Description |
+| --- | --- | --- |
+| checkpoint_dir | ./checkpoints | Checkpoint directory |
+| save_every_n_epochs | 1 | Save every N epochs |
+| keep_last_n | 5 | Number of checkpoints to keep |
+| resume_from | null | Path to checkpoint to resume from |
+
 ```yaml
-checkpoint:
-  checkpoint_dir: ./checkpoints   # Checkpoint directory
-  save_every_n_epochs: 1          # Save every N epochs
-  keep_last_n: 5                  # Number of checkpoints to keep
-  save_best: true                 # Keep best checkpoint
-  resume_from: null               # Path to checkpoint to resume from
+checkpoint_config:
+  checkpoint_dir: ./checkpoints
+  save_every_n_epochs: 1
+  keep_last_n: 5
+  resume_from: null
+
 ```
 
 ### LoggingConfig
 
-```yaml
-logging:
-  log_dir: ./logs             # Log directory
-  log_every_n_iters: 10       # Log every N iterations
-  log_verbosity: info         # Logging level (debug, info, warning, error)
-
-  # Weights & Biases integration
-  use_wandb: false            # Enable W&B experiment tracking
-  wandb_project: null         # W&B project name
-  wandb_entity: null          # W&B entity (username or team)
-  wandb_run_name: null        # Custom run name (optional)
-```
-
----
-
-## Complete Example
+| Field | Exemple | Description |
+| --- | --- | --- |
+| log_dir | ./logs | Log directory |
+| log_every_n_iters | 10 | Log every N iterations |
+| log_verbosity | info | Logging level (debug, info, warning, error) |
+| use_wandb | false | Enable W&B experiment tracking |
+| wandb_project | null | W&B project name |
+| wandb_entity | null | W&B entity (username or team) |
+| wandb_run_name | null | Custom run name (optional) |
 
 ```yaml
-# configs/imagenet100.yaml
-data:
-  dataset: imagenet100
-  data_path: ./data/imagenet100
-  batch_size: 64
-  num_workers: 8
-  pin_memory: true
-  train_split: 0.85
-  val_split: 0.15
-  seed: 42
-
-augmentation:
-  n_global_crops: 2
-  num_local_views: 6
-  global_crop_size: 224
-  local_crop_size: 96
-
-model:
-  backbone: resnet50
-  backbone_pretrained: false
-  projection_output_dim: 2048
-
-loss:
-  student_temp: 0.1
-  teacher_temp: 0.04
-  center_momentum: 0.9
-
-optimizer:
-  optimizer: adamw
-  lr: 0.0005
-  weight_decay: 0.04
-
-scheduler:
-  scheduler: cosine_warmup
-  warmup_epochs: 10
-  min_lr: 1.0e-6
-
-training:
-  num_epochs: 200
-  teacher_momentum: 0.996
-  teacher_momentum_schedule: true
-  teacher_momentum_final: 1.0
-  gradient_clip: 3.0
-  gradient_accumulation_steps: 1
-  seed: 42
-
-checkpoint:
-  checkpoint_dir: ./checkpoints
-  save_every_n_epochs: 10
-  save_best: true
-
-logging:
+logging_config:
   log_dir: ./logs
-  log_every_n_iters: 50
+  log_every_n_iters: 10
   log_verbosity: info
   use_wandb: false
-```
+  wandb_project: null
+  wandb_entity: null
+  wandb_run_name: null
+
 
 ---
 
@@ -334,50 +293,25 @@ For training on Kaggle, use the specialized configuration files:
 
 ```yaml
 # configs/kaggle-imagenet100.yaml
-data:
+data_config:
   dataset: imagenet100
   data_path: /kaggle/input/imagenet100
   batch_size: 32
   num_workers: 2
 
-training:
+training_config:
   gradient_accumulation_steps: 2  # Simulate larger batch size
 
-checkpoint:
+checkpoint_config:
   checkpoint_dir: /kaggle/working/checkpoints
 
-logging:
+logging_config:
   log_dir: /kaggle/working/logs
   use_wandb: true
   wandb_project: dino-training
 ```
 
 See [Kaggle Training](#kaggle-training) for more details.
-
----
-
-## Validation
-
-Configuration is validated at multiple levels:
-
-1. **Type checking**: Dataclass enforces types
-2. **Value checking**: In `__post_init__` methods
-3. **Runtime checking**: In component constructors
-
-Example validation:
-
-```python
-@dataclass
-class LossConfig:
-    student_temp: float = 0.1
-    teacher_temp: float = 0.04
-
-    def __post_init__(self):
-        if self.student_temp <= 0:
-            raise ValueError("Temperature must be positive")
-        if self.student_temp <= self.teacher_temp:
-            warnings.warn("Student temp should be > teacher temp")
-```
 
 ---
 

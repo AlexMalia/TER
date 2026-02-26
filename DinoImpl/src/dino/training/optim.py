@@ -5,12 +5,11 @@ from __future__ import annotations
 import torch
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
-from typing import Iterator, TYPE_CHECKING
+from typing import Iterator
 from dino.utils.schedule import cosine_scheduler
 
 
-if TYPE_CHECKING:
-    from dino.config import OptimizerConfig, SchedulerConfig
+from dino.config import OptimizerConfig, SchedulerConfig
 
 
 def create_optimizer(

@@ -296,12 +296,6 @@ training:
   # Recommended: 3.0
   gradient_clip: 3.0
 
-  # Use automatic mixed precision (FP16) for faster training
-  # Requires GPU with Tensor Cores (V100, A100, RTX 20xx+)
-  # Type: bool
-  # Recommended: false (can cause instability)
-  mixed_precision: false
-
   # Random seed for training reproducibility
   # Type: int
   seed: 42

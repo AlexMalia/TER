@@ -3,11 +3,14 @@
 import torch
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, Any, TYPE_CHECKING
+from typing import Optional, Dict, Any
 import logging
+from torch.optim.lr_scheduler import LRScheduler
 
-if TYPE_CHECKING:
-    from .history import History
+from ..config import DinoConfig
+from .history import History
+
+    
 
 logger = logging.getLogger(__name__)
 
@@ -19,14 +22,14 @@ def save_checkpoint(
     dino_loss: torch.nn.Module,
     epoch: int,
     iteration: int,
-    config: Any,
+    config: DinoConfig,
     metrics: Optional[Dict[str, float]] = None,
     checkpoint_dir: str = './checkpoints',
     filename: Optional[str] = None,
     is_best: bool = False,
+    scheduler: LRScheduler = None,
     history: Optional['History'] = None,
     wandb_run_id: Optional[str] = None,
-    scheduler: Optional[Any] = None
 ) -> Path:
     """
     Save a complete checkpoint of the DINO training state.
@@ -44,6 +47,8 @@ def save_checkpoint(
         filename: Optional custom filename
         is_best: Whether this is the best checkpoint
         history: Optional History instance to save alongside checkpoint
+        wandb_run_id: Optional Weights & Biases run ID to save in checkpoint
+        scheduler: Optional learning rate scheduler to save state of
 
     Returns:
         Path to saved checkpoint
@@ -68,7 +73,7 @@ def save_checkpoint(
         'config': config.to_dict() if hasattr(config, 'to_dict') else config,
         'metrics': metrics or {},
         'timestamp': datetime.now().isoformat(),
-        'has_history': history is not None,
+        'history': history is not None,
         'wandb_run_id': wandb_run_id,
         'scheduler_state_dict': scheduler.state_dict() if scheduler is not None else None,
     }
@@ -155,8 +160,7 @@ def load_checkpoint(
 
     # Try to load history from associated JSON file
     history = None
-    if checkpoint.get('has_history', False):
-        from .history import History
+    if checkpoint.get('history', False):
         history_filename = checkpoint_path.stem + '_history.json'
         history_path = checkpoint_path.parent / history_filename
         if history_path.exists():

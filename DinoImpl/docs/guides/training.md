@@ -426,10 +426,6 @@ Train DINO models on Kaggle with GPU acceleration.
 ### Using Kaggle Configurations
 
 ```bash
-# Download from Kaggle
-kaggle kernels output your-username/dino-training -p ./
-
-# Or use the kaggle_manager.sh script
 ./kaggle/kaggle_manager.sh push
 ```
 

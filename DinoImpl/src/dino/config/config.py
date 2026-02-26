@@ -113,7 +113,6 @@ class TrainingConfig:
     teacher_momentum_final: float
     gradient_clip: float
     gradient_accumulation_steps: int
-    mixed_precision: bool
     seed: int
     device: str
 
@@ -125,7 +124,6 @@ class CheckpointConfig:
     checkpoint_dir: str
     save_every_n_epochs: int
     keep_last_n: int
-    save_best: bool
     resume_from: str
 
 
