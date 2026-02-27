@@ -44,6 +44,8 @@ class EvaluationConfig:
     use_knn_eval: bool = True
     eval_every_n_epochs: int = 10
     knn_k: int = 20
+    knn_temperature: float = 0.07
+    knn_batch_size: int = 256
 ```
 
 Update `_CONFIG_CLASSES` (line 146) to include:

@@ -1,7 +1,7 @@
 """DataLoader creation utilities."""
 
-from torch.utils.data import DataLoader, Dataset
-from typing import Optional, Tuple, Union
+from torch.utils.data import DataLoader
+from typing import Optional, Tuple
 import logging
 import torch
 
