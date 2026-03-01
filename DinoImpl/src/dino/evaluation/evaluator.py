@@ -15,3 +15,7 @@ class Evaluator(ABC):
     def from_config(cls, evaluate_config) -> "Evaluator":
         """Instantiate from an EvaluationConfig."""
         ...
+
+    def plot(self, model: DinoModel, data_loader: DataLoader, save_path: str):
+        """Optional method to plot evaluation results (e.g. t-SNE visualization)."""
+        ...

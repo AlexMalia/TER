@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
 from datetime import datetime
+import matplotlib.pyplot as plt
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class History:
         """
         self.iteration_metrics: List[Dict[str, Any]] = []
         self.epoch_metrics: List[Dict[str, Any]] = []
+        self.evaluation_metrics: List[Dict[str, Any]] = []
         self.metadata: Dict[str, Any] = metadata or {}
         self.metadata.setdefault('created_at', datetime.now().isoformat())
 
@@ -70,6 +72,22 @@ class History:
             **metrics
         }
         self.epoch_metrics.append(record)
+
+    def record_evaluation(self, epoch: int, metrics: Dict[str, float]) -> None:
+        """
+        Record evaluation metrics at the end of an epoch.
+
+        Args:
+            epoch: Epoch number (1-indexed)
+            metrics: Dict with evaluation metric values
+                     Expected keys depend on evaluation setup (e.g. 'knn_top1', 'knn_top5')
+        """
+        record = {
+            'epoch': epoch,
+            'timestamp': datetime.now().isoformat(),
+            **metrics
+        }
+        self.evaluation_metrics.append(record)
 
     def get_metric(self, name: str, level: str = 'iteration') -> List[float]:
         """
@@ -112,7 +130,8 @@ class History:
         return {
             'metadata': self.metadata,
             'iteration_metrics': self.iteration_metrics,
-            'epoch_metrics': self.epoch_metrics
+            'epoch_metrics': self.epoch_metrics,
+            'evaluation_metrics': self.evaluation_metrics
         }
 
     @classmethod
@@ -129,6 +148,7 @@ class History:
         history = cls(metadata=data.get('metadata', {}))
         history.iteration_metrics = data.get('iteration_metrics', [])
         history.epoch_metrics = data.get('epoch_metrics', [])
+        history.evaluation_metrics = data.get('evaluation_metrics', [])
         return history
 
     def save(self, path: Union[str, Path]) -> Path:
@@ -295,6 +315,59 @@ class History:
             save_path=save_path,
             **kwargs
         )
+    
+
+
+    def plot_knn(self, k_values=None, ax=None, title='KNN Accuracy', save_path=None, **kwargs):
+     """Plot KNN top-1 and top-5 accuracy over epochs.
+
+     Args:
+         k_values: k values to plot. If None, auto-detected from stored metrics.
+         ax: Optional existing matplotlib axes.
+         title: Plot title.
+         save_path: Optional path to save the figure.
+
+     Returns:
+         matplotlib.axes.Axes
+     """
+     if not self.evaluation_metrics:
+         logger.warning("No evaluation metrics recorded, skipping plot_knn")
+         return None
+
+     # Auto-detect k values from first recorded entry
+     if k_values is None:
+         sample = self.evaluation_metrics[0]
+         k_values = sorted([
+             int(key.split('_k')[1])
+             for key in sample
+             if key.startswith('knn_top1_k')
+         ])
+
+     epochs = [m['epoch'] for m in self.evaluation_metrics]
+
+     created_fig = ax is None
+     if created_fig:
+         fig, ax = plt.subplots(figsize=(10, 6))
+
+     for k in k_values:
+         top1 = [m.get(f'knn_top1_k{k}') for m in self.evaluation_metrics]
+         top5 = [m.get(f'knn_top5_k{k}') for m in self.evaluation_metrics]
+
+         ax.plot(epochs, top1, label=f'Top-1 k={k}', **kwargs)
+         if any(v is not None for v in top5):
+             ax.plot(epochs, top5, label=f'Top-5 k={k}', linestyle='--', **kwargs)
+
+     ax.set_xlabel('Epoch')
+     ax.set_ylabel('Accuracy (%)')
+     ax.set_title(title)
+     ax.legend()
+     ax.grid(True, alpha=0.3)
+
+     if save_path and created_fig:
+         plt.savefig(save_path, dpi=150, bbox_inches='tight')
+         logger.info(f"Plot saved to {save_path}")
+
+     return ax
 
     def _plot_metric(
         self,
@@ -321,14 +394,6 @@ class History:
         Returns:
             matplotlib.axes.Axes object
         """
-        try:
-            import matplotlib.pyplot as plt
-        except ImportError:
-            raise ImportError(
-                "matplotlib is required for plotting. "
-                "Install with: pip install matplotlib"
-            )
-
         values = self.get_metric(name, level=level)
         if level == 'iteration':
             x_values = self.get_iterations()
@@ -367,19 +432,19 @@ class History:
         Returns:
             matplotlib.figure.Figure object
         """
-        try:
-            import matplotlib.pyplot as plt
-        except ImportError:
-            raise ImportError(
-                "matplotlib is required for plotting. "
-                "Install with: pip install matplotlib"
-            )
-
-        fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+        has_knn = bool(self.evaluation_metrics)
+        if has_knn:
+            fig, axes = plt.subplots(2, 2, figsize=(16, 10))
+            axes = axes.flatten()
+        else:
+            fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 
         self.plot_loss(level=level, ax=axes[0])
         self.plot_learning_rate(level=level, ax=axes[1])
         self.plot_momentum(level=level, ax=axes[2])
+        if has_knn:
+            self.plot_knn(ax=axes[3])
+            axes[3].set_title('KNN Accuracy')
 
         plt.tight_layout()
 

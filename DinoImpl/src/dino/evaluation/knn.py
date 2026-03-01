@@ -1,5 +1,3 @@
-import numpy as np
-from sklearn.neighbors import KNeighborsClassifier
 import logging
 
 import torch
@@ -11,14 +9,20 @@ from .evaluator import Evaluator
 from dino.models.dino_model import DinoModel
 from ..config import EvaluationConfig
 
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
+
+
+
 logger = logging.getLogger(__name__)
 
 class KNNClassifier(Evaluator):
 
-    def __init__(self, ks: list[int], temperature: float, batch_size: int):
+    def __init__(self, ks: list[int], temperature: float, batch_size: int, device: str):
         self.ks = ks
         self.temperature = temperature
         self.batch_size = batch_size
+        self.device = device
 
     @torch.no_grad()
     def extract_features(self, model: DinoModel, data_loader: DataLoader):
@@ -28,7 +32,7 @@ class KNNClassifier(Evaluator):
         all_labels = []
 
         for images, label in data_loader:
-            images = images.to(model.device)
+            images = images.to(self.device)
             output = model.get_backbone_features(images)
 
             # L2 Norm to ensure cosine similarity is just dot product
@@ -46,7 +50,7 @@ class KNNClassifier(Evaluator):
         results = {}
 
         for k in self.ks:
-            knn_results = self.run_knn(test_features, test_labels, train_features, train_labels, num_classes)
+            knn_results = self.run_knn(test_features, test_labels, train_features, train_labels, num_classes, k)
             results[f"knn_top1_k{k}"] = knn_results["top1"]
             results[f"knn_top5_k{k}"] = knn_results["top5"]
         
@@ -87,3 +91,21 @@ class KNNClassifier(Evaluator):
             temperature=evaluate_config.knn_temperature,
             batch_size=evaluate_config.knn_batch_size
         )
+    
+
+    def plot(self, model: DinoModel, data_loader: DataLoader, save_path: str):
+        features, labels = self.extract_features(model, data_loader)
+        features = features.cpu().numpy()
+        labels = labels.cpu().numpy()
+
+        # Use t-SNE for dimensionality reduction to 2D
+        tsne = TSNE(n_components=2, random_state=0)
+        features_2d = tsne.fit_transform(features)
+
+        # Plotting
+        plt.figure(figsize=(10, 10))
+        scatter = plt.scatter(features_2d[:, 0], features_2d[:, 1], c=labels, cmap='tab10', alpha=0.6)
+        plt.legend(*scatter.legend_elements(), title="Classes")
+        plt.title("t-SNE of KNN Features")
+        plt.savefig(save_path)
+        plt.close()

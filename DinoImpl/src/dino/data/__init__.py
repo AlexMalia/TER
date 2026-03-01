@@ -5,13 +5,13 @@ from .datasets import (
     get_dataset,
     create_train_val_test_splits,
 )
-from .dataloaders import create_train_dataloaders, create_test_val_dataloaders, collate_multi_crop
+from .dataloaders import create_train_dataloaders, create_eval_dataloaders, collate_multi_crop
 
 __all__ = [
     'DINOTransform',
     'get_dataset',
     'create_train_val_test_splits',
     'create_train_dataloaders',
-    'create_test_val_dataloaders',
+    'create_eval_dataloaders',
     'collate_multi_crop',
 ]

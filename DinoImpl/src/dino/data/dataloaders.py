@@ -127,16 +127,21 @@ def create_train_dataloaders(
 
 
 
-def create_test_val_dataloaders(
+def create_eval_dataloaders(
     data_config: DataConfig,
-    augmentation_config: AugmentationConfig,
     return_test: bool = False
-) -> Tuple[DataLoader, Optional[DataLoader], Optional[DataLoader]]:
-    
+) -> Tuple[DataLoader, DataLoader, Optional[DataLoader]]:
     base_transform = DINOTransform.get_base_transform()
 
-    # Load dataset with transform
-    dataset = get_dataset(
+    train_dataset = get_dataset(
+        dataset_name=data_config.dataset,
+        data_path=data_config.data_path,
+        transform=base_transform,
+        download=True,
+        train=True
+    )
+
+    test_dataset = get_dataset(
         dataset_name=data_config.dataset,
         data_path=data_config.data_path,
         transform=base_transform,
@@ -144,28 +149,52 @@ def create_test_val_dataloaders(
         train=False
     )
 
-    val_dataset, test_dataset, _ = create_train_val_test_splits(dataset, train_split=0.5, val_split=0.5)
+    # Create dataloaders
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=data_config.batch_size,
+        shuffle=False,
+        num_workers=data_config.num_workers,
+        pin_memory=data_config.do_pin_memory
+    )
+    """
+    Args:
+        dataset: Full dataset
+        train_split: Fraction of data for training
+        val_split: Fraction of data for validation
+        seed: Random seed for reproducibility
+        """
+    _, val_dataset, test_dataset = create_train_val_test_splits(
+        dataset=test_dataset,
+        train_split=0.0,
+        val_split=0.5, 
+        seed=data_config.seed
+    )
 
     val_loader = DataLoader(
-        val_dataset, batch_size=data_config.batch_size, shuffle=False,
+        val_dataset,
+        batch_size=data_config.batch_size,
+        shuffle=False,
         num_workers=data_config.num_workers,
-        pin_memory=data_config.do_pin_memory,
-    )
-
-    test_loader = DataLoader(
-        test_dataset, batch_size=data_config.batch_size, shuffle=False,
-        num_workers=data_config.num_workers,
-        pin_memory=data_config.do_pin_memory,
-    )
-
-
-    logger.info(
-        f"Created dataloaders: "
-        f"val={len(val_loader)} batches, "
-        f"test={len(test_loader)} batches"
+        pin_memory=data_config.do_pin_memory
     )
 
     if return_test:
-        return val_loader, test_loader
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=data_config.batch_size,
+            shuffle=False,
+            num_workers=data_config.num_workers,
+            pin_memory=data_config.do_pin_memory
+        )
     else:
-        return val_loader, None
+        test_loader = None
+
+    logger.info(
+        f"Created eval dataloaders: "
+        f"train={len(train_loader)} batches, "
+        f"val={len(val_loader)} batches, "
+        f"test={len(test_loader) if test_loader is not None else 0} batches"
+    )
+
+    return train_loader, val_loader, test_loader

@@ -17,6 +17,12 @@ Example usage:
     # Plot from specific history file
     python scripts/visualize.py --history checkpoints/checkpoint_epoch_0010_history.json
 
+    # Plot KNN accuracy
+     python scripts/visualize.py --metric knn
+
+    # Save KNN plot
+    python scripts/visualize.py --metric knn --save plots/knn.png
+
     # Save plot to file
     python scripts/visualize.py --metric loss --save plots/loss.png
 """
@@ -46,7 +52,7 @@ def parse_args():
     parser.add_argument(
         "--metric",
         type=str,
-        choices=["loss", "learning_rate", "momentum", "all"],
+        choices=["loss", "learning_rate", "momentum", "knn", "all"],
         default="all",
         help="Metric to plot"
     )
@@ -108,6 +114,9 @@ def main():
     elif args.metric == "momentum":
         title = args.title or "Teacher Momentum Schedule"
         history.plot_momentum(level=args.level, title=title, save_path=args.save)
+    elif args.metric == "knn":
+        title = args.title or "KNN Evaluation Accuracy"
+        history.plot_knn(title=title, save_path=args.save)
 
     # Show plot if not saving
     if args.save:
