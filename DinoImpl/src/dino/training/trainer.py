@@ -12,6 +12,7 @@ from ..utils.ema import update_teacher_EMA, get_momentum_schedule
 from ..utils.checkpoint import save_checkpoint, load_checkpoint
 from ..utils.logging_utils import log_metrics
 from ..utils.history import History
+from ..evaluation import Evaluator
 
 from ..config.config import DinoConfig
 try:
@@ -57,10 +58,6 @@ class DinoTrainer:
         train_loader: Training data loader
         val_loader: Optional validation data loader
         device: Device to train on
-
-    Example:
-        >>> trainer = DinoTrainer(config, student, teacher, optimizer, loss_fn, train_loader)
-        >>> trainer.train(num_epochs=100)
     """
 
     def __init__(
@@ -73,7 +70,8 @@ class DinoTrainer:
         loss_fn: nn.Module,
         train_loader: DataLoader,
         val_loader: Optional[DataLoader] = None,
-        device: str = 'cuda'
+        device: str = 'cuda',
+        evaluator: Optional[Evaluator] = None,
     ):
         self.config = config
         self.student = student
@@ -84,6 +82,7 @@ class DinoTrainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.device = device
+        self.evaluator = evaluator
 
         # Training state
         self.current_epoch = 0
@@ -172,17 +171,11 @@ class DinoTrainer:
 
             if is_accumulation_step or is_last_batch:
                 last_momentum = self._optimizer_step(true_loss)
-
-
-            
-
-            
             
             pbar.set_postfix({
                 "loss": f"{true_loss:.4f}",
                 "momentum": f"{last_momentum:.4f}",
             })
-
 
             # Log periodically
             if (batch_idx + 1) % self.config.logging_config.log_every_n_iters == 0:
@@ -227,6 +220,14 @@ class DinoTrainer:
                     "epoch/lr": metrics['learning_rate'],
                     "epoch/momentum": metrics['momentum'],
                 })
+
+            eval_cfg = self.config.evaluation_config
+            if self.evaluator is not None and eval_cfg.use_knn_eval:
+                knn_metrics = self.evaluator.evaluate(
+                    model=self.teacher,
+                    train_loader=self.knn_train_loader,
+                    test_loader=self.knn_val_loader
+                )
 
             # Save checkpoint
             if epoch % self.config.checkpoint_config.save_every_n_epochs == 0:

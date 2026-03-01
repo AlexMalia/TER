@@ -7,13 +7,13 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 
-
+from .evaluator import Evaluator
 from dino.models.dino_model import DinoModel
 from ..config import EvaluationConfig
 
 logger = logging.getLogger(__name__)
 
-class KNNClassifier:
+class KNNClassifier(Evaluator):
 
     def __init__(self, ks: list[int], temperature: float, batch_size: int):
         self.ks = ks

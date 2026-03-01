@@ -1,3 +1,4 @@
 from .knn import KNNClassifier
+from .evaluator import Evaluator
 
-__all__ = ['KNNClassifier']
+__all__ = ['Evaluator', 'KNNClassifier']
