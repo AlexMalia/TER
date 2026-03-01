@@ -147,4 +147,8 @@ def create_train_val_test_splits(
         generator=generator
     )
 
+    if test_size == 0:
+        logger.warning("Test split is empty. Consider adjusting train_split and val_split.")
+        test_dataset = None
+
     return train_dataset, val_dataset, test_dataset

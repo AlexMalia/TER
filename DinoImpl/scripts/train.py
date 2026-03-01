@@ -9,7 +9,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from dino.config.config import DinoConfig
-from dino.data.dataloaders import create_dataloaders
+from dino.data.dataloaders import create_train_dataloaders, create_test_val_dataloaders
 from dino.models import DinoModel
 from dino.loss import DinoLoss
 from dino.training import DinoTrainer, create_optimizer, create_scheduler
@@ -90,8 +90,9 @@ def main():
 
     # Create dataloaders
     logger.info("Creating dataloaders...")
-    train_loader, val_loader, _ = create_dataloaders(config.data_config, config.augmentation_config)
-    logger.info(f"Created dataloaders: {len(train_loader)} train batches")
+    train_loader = create_train_dataloaders(config.data_config, config.augmentation_config)
+    val_loader, test_loader = create_test_val_dataloaders(config.data_config, config.augmentation_config)
+    logger.info(f"Created dataloaders: {len(train_loader)} train batches, {len(val_loader)} val batches, {len(test_loader)} test batches")
 
     # Create models
     logger.info("Creating models...")
