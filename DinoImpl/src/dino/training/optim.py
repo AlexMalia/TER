@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import torch
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
@@ -10,6 +11,8 @@ from dino.utils.schedule import cosine_scheduler
 
 
 from dino.config import OptimizerConfig, SchedulerConfig
+
+logger = logging.getLogger(__name__)
 
 
 def create_optimizer(
@@ -87,6 +90,12 @@ def create_scheduler(
     scheduler_name = scheduler_config.scheduler.lower()
 
     if scheduler_name == "cosine_warmup":
+        if warmup_steps >= total_steps:
+            raise ValueError(
+                f"warmup_epochs ({scheduler_config.warmup_epochs}) must be less than "
+                f"num_epochs ({total_steps // (total_steps // warmup_steps)}). "
+                f"Got warmup_steps={warmup_steps} >= total_steps={total_steps}."
+            )
         # Calculate warmup start factor
         start_factor = scheduler_config.warmup_start_lr / optimizer_config.lr \
             if scheduler_config.warmup_start_lr > 0 else 1e-8 / optimizer_config.lr
@@ -108,6 +117,11 @@ def create_scheduler(
             milestones=[warmup_steps]
         )
     elif scheduler_name == "cosine":
+        if warmup_steps > 0:
+            logger.warning(
+                f"scheduler='cosine' ignores warmup_epochs. "
+                f"Use scheduler='cosine_warmup' to enable warmup."
+            )
         return torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
             T_max=total_steps,

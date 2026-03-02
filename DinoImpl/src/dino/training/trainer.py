@@ -1,5 +1,6 @@
 """DINO Trainer class."""
 
+import math
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -100,11 +101,15 @@ class DinoTrainer:
 
         # EMA momentum schedule
         if config.training_config.teacher_momentum_schedule:
+            # Use optimizer steps per epoch (not raw batches) so the schedule
+            # is traversed at the same rate as current_iteration is incremented.
+            accumulation_steps = config.training_config.gradient_accumulation_steps
+            updates_per_epoch = math.ceil(self.n_iter_per_epoch / accumulation_steps)
             self.momentum_schedule = get_momentum_schedule(
                 base_momentum=config.training_config.teacher_momentum,
                 final_momentum=config.training_config.teacher_momentum_final,
                 num_epochs=config.training_config.num_epochs,
-                niter_per_epoch=self.n_iter_per_epoch
+                niter_per_epoch=updates_per_epoch
             )
         else:
             self.momentum_schedule = None

@@ -52,7 +52,7 @@ optimizer_config:
   eps: 1.0e-08
 
 scheduler_config:
-  scheduler: cosine
+  scheduler: cosine_warmup
   warmup_epochs: 10
   min_lr: 1.0e-06
   warmup_start_lr: 0.0
@@ -68,22 +68,22 @@ training_config:
   device: cuda
 
 checkpoint_config:
-  checkpoint_dir: ./checkpoints/imagenette/vits16-test
+  checkpoint_dir: ./outputs/checkpoints/imagenette/vits16-test-resume
   save_every_n_epochs: 4
   resume_from: null
 
 logging_config:
-  log_dir: ./logs/imagenette/vits16
+  log_dir: ./outputs/logs/imagenette/vits16-test-resume
   log_every_n_iters: 50
   log_verbosity: debug
   use_wandb: true
-  wandb_project: "dino-test"
+  wandb_project: "dino-test-resume"
   wandb_entity: null
-  wandb_run_name: "imagenette_vits16_test_run"
+  wandb_run_name: "imagenette_vits16_test_resume_run"
 
 evaluation_config:
   use_knn_eval: true
-  eval_every_n_epochs: 1
+  eval_every_n_epochs: 4
   knn_ks: [1, 5, 20]
   knn_temperature: 0.07
   knn_batch_size: 256
