@@ -8,6 +8,7 @@ from typing import Optional, Dict
 import logging
 from tqdm import tqdm
 from torch.optim.lr_scheduler import LRScheduler
+import os
 
 from ..utils.ema import update_teacher_EMA, get_momentum_schedule
 from ..utils.checkpoint import save_checkpoint, load_checkpoint
@@ -241,12 +242,14 @@ class DinoTrainer:
                     # Log KNN metrics
                     log_metrics(knn_metrics, epoch, prefix="KNN Eval")
                     self.history.record_evaluation(epoch, knn_metrics)
-                    self.evaluator.plot(self.teacher, self.val_eval_loader, save_path=f"knn_eval_epoch_{epoch}.png")
+                    knn_plot_path = os.path.join(self.config.evaluation_config.knn_plot_dir, f"knn_eval_epoch_{epoch}.png")
+                    self.evaluator.plot(self.teacher, self.val_eval_loader, save_path=knn_plot_path)
                     # wandb logging
                     if wandb is not None and wandb.run is not None:
                         wandb.log({
                             "epoch": epoch,
-                            **{f"knn_eval/{k}": v for k, v in knn_metrics.items()}
+                            **{f"knn_eval/{k}": v for k, v in knn_metrics.items()},
+                            "knn_eval/plot": wandb.Image(knn_plot_path)
                         })
 
             # Save checkpoint

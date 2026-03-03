@@ -151,6 +151,7 @@ class EvaluationConfig:
     knn_ks: list[int]
     knn_temperature: float
     knn_batch_size: int
+    knn_plot_dir: str
 
 
 _CONFIG_CLASSES = {
