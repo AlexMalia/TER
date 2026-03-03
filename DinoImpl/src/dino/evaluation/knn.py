@@ -26,7 +26,12 @@ class KNNClassifier(Evaluator):
 
     @torch.no_grad()
     def extract_features(self, model: DinoModel, data_loader: DataLoader):
-        """Extract features from the model for the entire dataset."""
+        """Extract and L2-normalize CLS token features for the entire dataset.
+
+        Returns:
+            features: (N, D) normalized float tensor on CPU
+            labels:   (N,)           int64 tensor on CPU
+        """
         model.eval()
         all_features = []
         all_labels = []
@@ -47,42 +52,43 @@ class KNNClassifier(Evaluator):
         test_features, test_labels = self.extract_features(model, test_loader)
 
         num_classes = int(train_labels.max().item()) + 1
+
+        similarity = test_features @ train_features.T
+
+        # Pre-sort by descending similarity so each k just slices the top rows.
+        # topk on the full matrix is done for max(k) and reused for smaller k.
+        k_max = max(self.ks)
+        top_distances, top_indices = similarity.topk(k=k_max, dim=-1)
+
+        # (N_test, k_max) temperature-scaled weights, computed once
+        top_weights = (top_distances / self.temperature).exp()
+        top_neighbor_labels = train_labels[top_indices]
+
         results = {}
 
         for k in self.ks:
-            knn_results = self.run_knn(test_features, test_labels, train_features, train_labels, num_classes, k)
-            results[f"knn_top1_k{k}"] = knn_results["top1"]
-            results[f"knn_top5_k{k}"] = knn_results["top5"]
+            weights = top_weights[:, :k]
+            neighbor_labels = top_neighbor_labels[:, :k]
+
+            # Creating score matrix (N_test, num_classes), +1 for each neighbor's class, then apply temperature weighting
+            scores = torch.zeros(len(test_labels), num_classes)
+            scores.scatter_add_(1, neighbor_labels, weights)
+
+            # top-1
+            predictions = scores.argmax(dim=1) # (N_test,)
+            top1 = (predictions == test_labels).float().mean().item() * 100
+
+            # top-5
+            top5 = None
+            if num_classes >= 5:
+                top5_preds = scores.topk(5, dim=1).indices      # (N_test, 5)
+                top5 = (top5_preds == test_labels.unsqueeze(1)).any(dim=1).float().mean().item() * 100
+
+            results[f"knn_top1_k{k}"] = top1
+            results[f"knn_top5_k{k}"] = top5
         
         return results
-            
-    def run_knn(self, test_features: torch.Tensor, test_labels: torch.Tensor, train_features: torch.Tensor, train_labels: torch.Tensor, num_classes: int, k: int):
-        # Features are L2 normalized, dot product = cosine similarity
-        similarity = test_features @ train_features.T
 
-        # k largest similarity scores and their indices
-        distances, indices = similarity.topk(k=k, dim=-1)
-        
-        # Apply temperature scaling to the similarity scores to get weights for neighbors
-        weights = (distances / self.temperature).exp()
-        neighbor_labels = train_labels[indices]
-
-        # Creating score matrix (N_test, num_classes), +1 for each neighbor's class, then apply temperature weighting
-        scores = torch.zeros(len(test_labels), num_classes)
-        scores.scatter_add_(1, neighbor_labels, weights)
-        
-        predictions = scores.argmax(dim=1)
-        top1 = (predictions == test_labels).float().mean().item() * 100
-
-        predictions = scores.argmax(dim=1)  # (N_test,)
-        top1 = (predictions == test_labels).float().mean().item() * 100
-
-        top5 = None
-        if num_classes >= 5:
-            top5_preds = scores.topk(5, dim=1).indices       # (N_test, 5)
-            top5 = (top5_preds == test_labels.unsqueeze(1)).any(dim=1).float().mean().item() * 100
-        
-        return {"top1": top1, "top5": top5}
     
     @classmethod
     def from_config(cls, evaluate_config: EvaluationConfig):
@@ -95,8 +101,8 @@ class KNNClassifier(Evaluator):
 
     def plot(self, model: DinoModel, data_loader: DataLoader, save_path: str):
         features, labels = self.extract_features(model, data_loader)
-        features = features.cpu().numpy()
-        labels = labels.cpu().numpy()
+        features = features.numpy()
+        labels = labels.numpy()
 
         # Use t-SNE for dimensionality reduction to 2D
         tsne = TSNE(n_components=2, random_state=0)
