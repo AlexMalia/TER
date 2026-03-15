@@ -178,6 +178,7 @@ def run_training(device: str):
 
     # Setup logging
     setup_logging(config.logging_config.log_dir, config.logging_config.log_verbosity)
+    torch.set_printoptions(profile="full", linewidth=200)
     logger = logging.getLogger(__name__)
 
     logger.info(f"Using config: {CONFIG_FILE}")

@@ -8,7 +8,7 @@ from typing import Optional, Dict
 import logging
 from tqdm import tqdm
 from torch.optim.lr_scheduler import LRScheduler
-import os
+from pathlib import Path
 
 from ..utils.ema import update_teacher_EMA, get_momentum_schedule
 from ..utils.checkpoint import save_checkpoint, load_checkpoint
@@ -233,24 +233,7 @@ class DinoTrainer:
 
             if self.evaluator is not None and self.config.evaluation_config.use_knn_eval:
                 if epoch % self.config.evaluation_config.eval_every_n_epochs == 0:
-                    knn_metrics = self.evaluator.evaluate(
-                        model=self.teacher,
-                        train_loader=self.train_eval_loader,
-                        test_loader=self.val_eval_loader
-                    )
-
-                    # Log KNN metrics
-                    log_metrics(knn_metrics, epoch, prefix="KNN Eval")
-                    self.history.record_evaluation(epoch, knn_metrics)
-                    knn_plot_path = os.path.join(self.config.evaluation_config.knn_plot_dir, f"knn_eval_epoch_{epoch}.png")
-                    self.evaluator.plot(self.teacher, self.val_eval_loader, save_path=knn_plot_path)
-                    # wandb logging
-                    if wandb is not None and wandb.run is not None:
-                        wandb.log({
-                            "epoch": epoch,
-                            **{f"knn_eval/{k}": v for k, v in knn_metrics.items()},
-                            "knn_eval/plot": wandb.Image(knn_plot_path)
-                        })
+                    self._run_knn(epoch)
 
             # Save checkpoint
             if epoch % self.config.checkpoint_config.save_every_n_epochs == 0:
@@ -429,3 +412,26 @@ class DinoTrainer:
                 for block, norms in block_norms.items()
             )
             logger.debug(f"Student gradient norms (avg per block) | {block_summary}")
+
+    def _run_knn(self, epoch: int):
+        knn_metrics = self.evaluator.evaluate(
+            model=self.teacher,
+            train_loader=self.train_eval_loader,
+            test_loader=self.val_eval_loader
+        )
+
+        plot_path = Path(self.config.evaluation_config.knn_plot_dir)
+        plot_path.mkdir(parents=True, exist_ok=True)
+        knn_plot_path = Path(plot_path, f"knn_eval_epoch_{epoch}.png")
+
+        # Log KNN metrics
+        log_metrics(knn_metrics, epoch, prefix="KNN Eval")
+        self.history.record_evaluation(epoch, knn_metrics)
+        self.evaluator.plot(self.teacher, self.val_eval_loader, save_path=knn_plot_path)
+        # wandb logging
+        if wandb is not None and wandb.run is not None:
+            wandb.log({
+                "epoch": epoch,
+                **{f"knn_eval/{k}": v for k, v in knn_metrics.items()},
+                "knn_eval/plot": wandb.Image(knn_plot_path)
+            })
