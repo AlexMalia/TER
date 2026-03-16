@@ -43,13 +43,6 @@ DINO teaches a neural network to recognize images **without any labels**. It wor
 
     [:octicons-arrow-right-24: API Reference](api/models.md)
 
--   :material-wrench:{ .lg .middle } **Troubleshooting**
-
-    ---
-
-    Solutions to common problems
-
-    [:octicons-arrow-right-24: Troubleshooting](troubleshooting.md)
 
 </div>
 

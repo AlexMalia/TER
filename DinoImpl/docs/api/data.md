@@ -26,13 +26,27 @@ API documentation for the data module.
       show_root_heading: true
       show_source: true
 
+### create_train_val_test_splits
+
+::: dino.data.create_train_val_test_splits
+    options:
+      show_root_heading: true
+      show_source: true
+
 ---
 
 ## DataLoaders
 
-### create_dataloaders
+### create_train_dataloaders
 
-::: dino.data.create_dataloaders
+::: dino.data.create_train_dataloaders
+    options:
+      show_root_heading: true
+      show_source: true
+
+### create_eval_dataloaders
+
+::: dino.data.create_eval_dataloaders
     options:
       show_root_heading: true
       show_source: true
@@ -52,10 +66,11 @@ API documentation for the data module.
 
 ```python
 from dino.config import DinoConfig
-from dino.data import create_dataloaders
+from dino.data import create_train_dataloaders, create_eval_dataloaders
 
 config = DinoConfig.from_yaml('configs/default.yaml')
-train_loader, val_loader, test_loader = create_dataloaders(config)
+train_loader = create_train_dataloaders(config)
+val_loader, test_loader = create_eval_dataloaders(config)
 
 for views, labels in train_loader:
     # views: list of 8 tensors, each [batch, 3, H, W]

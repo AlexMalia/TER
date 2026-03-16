@@ -18,6 +18,17 @@ API documentation for the training module.
 
 ---
 
+## View Helpers
+
+### get_global_local_views
+
+::: dino.training.get_global_local_views
+    options:
+      show_root_heading: true
+      show_source: true
+
+---
+
 ## Optimizer Helpers
 
 ### create_optimizer

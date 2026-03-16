@@ -4,7 +4,7 @@ import math
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
 import logging
 from tqdm import tqdm
 from torch.optim.lr_scheduler import LRScheduler
@@ -25,7 +25,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def get_global_local_views(view_set):
+def get_global_local_views(view_set: List[torch.Tensor]) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
     """
     Separate global and local views from view set.
 
