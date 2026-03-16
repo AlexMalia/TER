@@ -78,7 +78,13 @@ def main():
     logger.info(f"Current device: {torch.cuda.get_device_name() if torch.cuda.is_available() else 'CPU'}")
     
     # Determine device
-    device = args.device if torch.cuda.is_available() else "cpu"
+    if torch.cuda.is_available():
+        device = args.device if hasattr(args, 'device') and args.device else "cuda"
+    elif torch.backends.mps.is_available():
+        device = "mps"  # Accélération GPU pour les puces Apple Silicon
+    else:
+        device = "cpu"  # Solution de repli pour les anciens Mac Intel ou sans GPU
+
     config.training_config.device = device
 
     logger.info(f"Using device: {device}")
@@ -96,6 +102,126 @@ def main():
     train_loader = create_train_dataloaders(config.data_config, config.augmentation_config, is_graph=True)
     logger.info(f"Created dataloaders: {len(train_loader)} train batches")
 
+    # Create models
+    logger.info("Creating models...")
+    student = DinoModel.from_config(config.model_config)
+    teacher = DinoModel.from_config(config.model_config)
+
+    # Teacher is a perfect copy of student at initialization
+    teacher.load_state_dict(student.state_dict())
+    for p in teacher.parameters():
+        p.requires_grad = False
+
+    param_count = student.parameter_count()
+    logger.info(
+        f"Created models with {param_count['total']:,} parameters "
+        f"({param_count['backbone']:,} backbone, {param_count['projection']:,} projection)"
+    )
+
+    dino_loss = DinoLoss.from_config(
+        config.loss_config,
+        config.augmentation_config,
+        out_dim=student.output_dim
+    )
+
+    # Create optimizer and its scheduler
+    optimizer = create_optimizer(student.parameters(), config.optimizer_config)
+
+    accumulation_steps = config.training_config.gradient_accumulation_steps
+
+    # Nb of actual updates per epoch (not the number of forward passes)
+    updates_per_epoch = math.ceil(len(train_loader) / accumulation_steps)
+
+    total_steps = config.training_config.num_epochs * updates_per_epoch
+    warmup_steps = config.scheduler_config.warmup_epochs * updates_per_epoch
+
+    optim_scheduler = create_scheduler(
+        optimizer,
+        config.scheduler_config,
+        config.optimizer_config,
+        total_steps,
+        warmup_steps
+    )
+
+    logger.info(
+        f"Created scheduler with {warmup_steps} warmup steps, {total_steps} total steps "
+        f"(accumulation_steps={accumulation_steps})"
+    )
+
+
+    # Create trainer
+    trainer = DinoTrainer(
+        config=config,
+        student=student,
+        teacher=teacher,
+        optimizer=optimizer,
+        scheduler=optim_scheduler,
+        loss_fn=dino_loss,
+        train_loader=train_loader,
+        device=device,
+    )
+
+
+    if config.logging_config.use_wandb:
+        try:
+            import wandb
+
+            # If resuming, try to get the wandb run ID from checkpoint
+            wandb_run_id = getattr(trainer, 'resumed_wandb_run_id', None)
+            if wandb_run_id is None:
+                wandb_run_id = wandb.util.generate_id()
+
+            wandb.init(
+                project=config.logging_config.wandb_project or "dino-training",
+                entity=config.logging_config.wandb_entity,
+                name=config.logging_config.wandb_run_name,
+                id=wandb_run_id,
+                resume="allow",
+                config=config.to_dict(),
+                save_code=True,
+                tags=[config.model_config.backbone, config.data_config.dataset],
+            )
+
+            # Define metric axes so iteration and epoch charts are separate
+            wandb.define_metric("iteration")
+            wandb.define_metric("epoch")
+            wandb.define_metric("train/*", step_metric="iteration")
+            wandb.define_metric("epoch/*", step_metric="epoch")
+
+            # Log computed values not in the static config
+            wandb.config.update({
+                "total_steps": total_steps,
+                "warmup_steps": warmup_steps,
+                "param_count": param_count['total'],
+            }, allow_val_change=True)
+
+        except ImportError:
+            logger.warning("wandb not installed. pip install wandb to enable.")
+            config.logging_config.use_wandb = False
+
+    # Train
+    logger.info("=" * 80)
+    logger.info("Starting training...")
+    logger.info("=" * 80)
+
+    try:
+        trainer.train()
+    except KeyboardInterrupt:
+        logger.info("\nTraining interrupted by user")
+    except Exception as e:
+        logger.error(f"Training failed with error: {e}", exc_info=True)
+        raise
+    finally:
+        if config.logging_config.use_wandb:
+            try:
+                import wandb
+                wandb.finish()
+            except Exception:
+                pass
+
+    logger.info("=" * 80)
+    logger.info("Training completed successfully!")
+    logger.info("=" * 80)
     
 
 

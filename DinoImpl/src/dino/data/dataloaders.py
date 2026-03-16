@@ -28,7 +28,7 @@ def collate_graph_views(samples):
         }
         views_batch.append(batched_view)
 
-    return views_batch
+    return views_batch, torch.zeros(len(samples)) # Dummy labels (not used for graph data, but keeping consistent with collate_multi_crop output format)
 
 def collate_multi_crop(samples: List[Tuple]) -> Tuple[List[torch.Tensor], torch.Tensor]:
     """
