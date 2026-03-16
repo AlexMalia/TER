@@ -138,7 +138,7 @@ def load_checkpoint(
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
     logger.info(f"Loading checkpoint from {checkpoint_path}")
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
 
     # Load model states
     student.load_state_dict(checkpoint['student_state_dict'])

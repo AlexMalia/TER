@@ -1,7 +1,7 @@
 """DataLoader creation utilities."""
 
-from torch.utils.data import DataLoader, Dataset
-from typing import Optional, Tuple, Union
+from torch.utils.data import DataLoader
+from typing import Optional, Tuple
 import logging
 import torch
 
@@ -73,24 +73,19 @@ def collate_multi_crop(samples):
     return views_batch, labels
 
 
-def create_dataloaders(
+def create_train_dataloaders(
     data_config: DataConfig,
     augmentation_config: AugmentationConfig,
-    return_test: bool = False
-) -> Tuple[DataLoader, Optional[DataLoader], Optional[DataLoader]]:
+) -> DataLoader:
     """
-    Create train, validation, and optionally test dataloaders from config.
-
-    Supports both standard datasets (downloaded) and.
+    Create a training dataloader from config.
 
     Args:
         data_config: DataConfig instance
         augmentation_config: AugmentationConfig instance
-        return_test: Whether to return test dataloader
 
     Returns:
-        Tuple of (train_loader, val_loader, test_loader)
-        If return_test is False, test_loader will be None
+        DataLoader: Training dataloader.
     """
 
     # Create transform
@@ -107,17 +102,9 @@ def create_dataloaders(
 
     logger.info(f"Loaded {data_config.dataset} dataset with {len(dataset)} samples")
 
-    # Split into train/val/test
-    train_dataset, val_dataset, test_dataset = create_train_val_test_splits(
-        dataset,
-        train_split=data_config.train_split,
-        val_split=data_config.val_split,
-        seed=data_config.seed
-    )
-
     # Create dataloaders
     train_loader = DataLoader(
-        train_dataset,
+        dataset=dataset,
         batch_size=data_config.batch_size,
         shuffle=True,
         num_workers=data_config.num_workers,
@@ -126,33 +113,76 @@ def create_dataloaders(
         drop_last=True  # Drop last incomplete batch for stability
     )
 
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=data_config.batch_size,
-        shuffle=False,
-        num_workers=data_config.num_workers,
-        pin_memory=data_config.do_pin_memory,
-        collate_fn=collate_multi_crop,
-        drop_last=False
-    ) if len(val_dataset) > 0 else None
-
-    test_loader = None
-    if return_test and len(test_dataset) > 0:
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=data_config.batch_size,
-            shuffle=False,
-            num_workers=data_config.num_workers,
-            pin_memory=data_config.do_pin_memory,
-            collate_fn=collate_multi_crop,
-            drop_last=False
-        )
-
     logger.info(
         f"Created dataloaders: "
         f"train={len(train_loader)} batches, "
-        f"val={len(val_loader) if val_loader else 0} batches, "
-        f"test={len(test_loader) if test_loader else 0} batches"
+    )
+
+    return train_loader
+
+
+
+def create_eval_dataloaders(
+    data_config: DataConfig,
+    return_test: bool = False
+) -> Tuple[DataLoader, DataLoader, Optional[DataLoader]]:
+    """
+    Create eval dataloaders (no augmentation) for train, val, and optionally test sets.
+
+    The val and test loaders are derived from the test split of the dataset,
+    divided 50/50 via create_train_val_test_splits.
+
+    Args:
+        data_config: DataConfig instance
+        return_test: Whether to return a test dataloader
+
+    Returns:
+        Tuple of (train_eval_loader, val_loader, test_loader)
+        If return_test is False, test_loader will be None
+    """
+    base_transform = DINOTransform.get_base_transform()
+
+    # Load train set (no augmentation, for eval of train representations)
+    train_dataset = get_dataset(
+        dataset_name=data_config.dataset,
+        data_path=data_config.data_path,
+        transform=base_transform,
+        download=True,
+        train=True
+    )
+
+    # Load test set, then split into val/test halves
+    full_test_dataset = get_dataset(
+        dataset_name=data_config.dataset,
+        data_path=data_config.data_path,
+        transform=base_transform,
+        download=True,
+        train=False
+    )
+
+    _, val_dataset, test_dataset = create_train_val_test_splits(
+        dataset=full_test_dataset,
+        train_split=0.0,
+        val_split=0.5,
+        seed=data_config.seed
+    )
+
+    loader_kwargs = dict(
+        batch_size=data_config.batch_size,
+        shuffle=False,
+        num_workers=data_config.num_workers,
+        pin_memory=data_config.do_pin_memory
+    )
+
+    train_loader = DataLoader(train_dataset, **loader_kwargs)
+    val_loader = DataLoader(val_dataset, **loader_kwargs)
+    test_loader = DataLoader(test_dataset, **loader_kwargs) if return_test else None
+
+    logger.info(
+        f"Created eval dataloaders: "
+        f"train={len(train_loader)} batches, "
+        f"val={len(val_loader)} batches, "
+        f"test={len(test_loader) if test_loader is not None else 0} batches"
     )
 
     return train_loader, val_loader, test_loader
