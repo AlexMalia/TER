@@ -33,9 +33,11 @@ def get_backbone(name: str, pretrained: bool = False, **kwargs: Any) -> Backbone
     Returns:
         Backbone instance
     """
-    # Import here to avoid circular imports
+
+    # Avoid circular imports
     from .resnet import ResnetBackboneDino
     from .vit import DinoBackbone
+    from .graphformers import GraphformersBackbone
 
     name_lower = name.lower()
 
@@ -46,6 +48,9 @@ def get_backbone(name: str, pretrained: bool = False, **kwargs: Any) -> Backbone
     # DINO v1
     elif name_lower in ['dino_vits8', 'dino_vits16', 'dino_vitb8', 'dino_vitb16']:
         return DinoBackbone(variant=name_lower, pretrained=pretrained)
+    
+    elif name_lower in ['graphformers']:
+        return GraphformersBackbone.from_pretrained()
 
     else:
         raise ValueError(

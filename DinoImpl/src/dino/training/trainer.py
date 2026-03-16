@@ -156,7 +156,17 @@ class DinoTrainer:
 
         for batch_idx, (view_set, _) in enumerate(pbar):
             # Move views to device
-            view_set = [v.to(self.device) for v in view_set]
+            # view_set = [v.to(self.device) for v in view_set]
+
+            if isinstance(view_set[0], dict):
+                # AMR : chaque view est un dict de tenseurs
+                view_set = [
+                    {k: t.to(self.device) for k, t in v.items()}
+                    for v in view_set
+                ]
+            else:
+                # Images : chaque view est un tenseur
+                view_set = [v.to(self.device) for v in view_set]
 
             # Get global and all views
             global_views, all_views = get_global_local_views(view_set)
