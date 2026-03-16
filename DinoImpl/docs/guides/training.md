@@ -462,4 +462,3 @@ logging:
 - [Loss Function](loss-function.md) - DINO loss computation
 - [Checkpointing](checkpointing.md) - Saving and resuming training
 - [Configuration](configuration.md) - Full configuration reference
-- [Performance](../advanced/performance.md) - Optimization tips

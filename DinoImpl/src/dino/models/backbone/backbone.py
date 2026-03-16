@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn as nn
+from typing import Any
 
 
 class BackboneBase(nn.Module):
@@ -20,7 +21,7 @@ class BackboneBase(nn.Module):
 
 
 
-def get_backbone(name: str, pretrained: bool = False, **kwargs) -> BackboneBase:
+def get_backbone(name: str, pretrained: bool = False, **kwargs: Any) -> BackboneBase:
     """
     Factory function to get backbone by name.
 

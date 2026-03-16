@@ -6,6 +6,13 @@ API documentation for utility functions.
 
 ## EMA
 
+### EMAUpdater
+
+::: dino.utils.EMAUpdater
+    options:
+      show_root_heading: true
+      show_source: true
+
 ### update_teacher_EMA
 
 ::: dino.utils.update_teacher_EMA
@@ -38,6 +45,49 @@ API documentation for utility functions.
       show_root_heading: true
       show_source: true
 
+### find_latest_checkpoint
+
+::: dino.utils.find_latest_checkpoint
+    options:
+      show_root_heading: true
+      show_source: true
+
+### list_checkpoints
+
+::: dino.utils.list_checkpoints
+    options:
+      show_root_heading: true
+      show_source: true
+
+---
+
+## Logging
+
+### setup_logging
+
+::: dino.utils.setup_logging
+    options:
+      show_root_heading: true
+      show_source: true
+
+### log_metrics
+
+::: dino.utils.log_metrics
+    options:
+      show_root_heading: true
+      show_source: true
+
+---
+
+## Scheduling
+
+### cosine_scheduler
+
+::: dino.utils.cosine_scheduler
+    options:
+      show_root_heading: true
+      show_source: true
+
 ---
 
 ## History
@@ -50,6 +100,7 @@ API documentation for utility functions.
         - __init__
         - record_iteration
         - record_epoch
+        - record_evaluation
         - get_metric
         - get_iterations
         - get_epochs
