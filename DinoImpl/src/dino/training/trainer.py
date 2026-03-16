@@ -1,17 +1,20 @@
 """DINO Trainer class."""
 
+import math
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 import logging
 from tqdm import tqdm
 from torch.optim.lr_scheduler import LRScheduler
+from pathlib import Path
 
 from ..utils.ema import update_teacher_EMA, get_momentum_schedule
 from ..utils.checkpoint import save_checkpoint, load_checkpoint
 from ..utils.logging_utils import log_metrics
 from ..utils.history import History
+from ..evaluation import Evaluator
 
 from ..config.config import DinoConfig
 try:
@@ -55,12 +58,10 @@ class DinoTrainer:
         optimizer: Optimizer
         loss_fn: Loss function
         train_loader: Training data loader
-        val_loader: Optional validation data loader
         device: Device to train on
-
-    Example:
-        >>> trainer = DinoTrainer(config, student, teacher, optimizer, loss_fn, train_loader)
-        >>> trainer.train(num_epochs=100)
+        train_eval_loader: Optional data loader for evaluating on the training set.
+        val_eval_loader: Optional data loader for evaluating on the validation set.
+        evaluator: Optional Evaluator used for downstream evaluation.
     """
 
     def __init__(
@@ -72,8 +73,10 @@ class DinoTrainer:
         scheduler: Optional[LRScheduler],
         loss_fn: nn.Module,
         train_loader: DataLoader,
-        val_loader: Optional[DataLoader] = None,
-        device: str = 'cuda'
+        device: str,
+        train_eval_loader: Optional[DataLoader] = None,
+        val_eval_loader: Optional[DataLoader] = None,
+        evaluator: Optional[Evaluator] = None,
     ):
         self.config = config
         self.student = student
@@ -82,8 +85,11 @@ class DinoTrainer:
         self.scheduler = scheduler
         self.loss_fn = loss_fn
         self.train_loader = train_loader
-        self.val_loader = val_loader
         self.device = device
+        self.evaluator = evaluator
+
+        self.train_eval_loader = train_eval_loader
+        self.val_eval_loader = val_eval_loader
 
         # Training state
         self.current_epoch = 0
@@ -98,11 +104,15 @@ class DinoTrainer:
 
         # EMA momentum schedule
         if config.training_config.teacher_momentum_schedule:
+            # Use optimizer steps per epoch (not raw batches) so the schedule
+            # is traversed at the same rate as current_iteration is incremented.
+            accumulation_steps = config.training_config.gradient_accumulation_steps
+            updates_per_epoch = math.ceil(self.n_iter_per_epoch / accumulation_steps)
             self.momentum_schedule = get_momentum_schedule(
                 base_momentum=config.training_config.teacher_momentum,
                 final_momentum=config.training_config.teacher_momentum_final,
                 num_epochs=config.training_config.num_epochs,
-                niter_per_epoch=self.n_iter_per_epoch
+                niter_per_epoch=updates_per_epoch
             )
         else:
             self.momentum_schedule = None
@@ -137,7 +147,7 @@ class DinoTrainer:
         # Progress bar 
         pbar = tqdm(
             self.train_loader,
-            desc=f"Epoch {epoch}/{self.config.training_config.num_epochs}",
+            desc=f"Epoch {epoch}/{self._target_epoch}",
             leave=True,
             total=num_batches,
         )
@@ -165,24 +175,16 @@ class DinoTrainer:
 
             (loss / accumulation_steps).backward()
 
-            epoch_loss += loss.item()
-
             is_accumulation_step = (batch_idx + 1) % accumulation_steps == 0
             is_last_batch = (batch_idx + 1) == num_batches
 
             if is_accumulation_step or is_last_batch:
                 last_momentum = self._optimizer_step(true_loss)
-
-
-            
-
-            
             
             pbar.set_postfix({
                 "loss": f"{true_loss:.4f}",
                 "momentum": f"{last_momentum:.4f}",
             })
-
 
             # Log periodically
             if (batch_idx + 1) % self.config.logging_config.log_every_n_iters == 0:
@@ -208,8 +210,11 @@ class DinoTrainer:
 
         logger.info(f"Starting training for {num_epochs} epochs")
         logger.info(f"Checkpoint directory: {self.config.checkpoint_config.checkpoint_dir}")
+        
 
-        for epoch in range(self.current_epoch + 1, self.current_epoch + num_epochs + 1):
+        target_epoch = num_epochs or self.config.training_config.num_epochs
+        self._target_epoch = target_epoch
+        for epoch in range(self.current_epoch + 1, target_epoch + 1):
             # Train for one epoch
             metrics = self.train_epoch(epoch)
 
@@ -227,6 +232,10 @@ class DinoTrainer:
                     "epoch/lr": metrics['learning_rate'],
                     "epoch/momentum": metrics['momentum'],
                 })
+
+            if self.evaluator is not None and self.config.evaluation_config.use_knn_eval:
+                if epoch % self.config.evaluation_config.eval_every_n_epochs == 0:
+                    self._run_knn(epoch)
 
             # Save checkpoint
             if epoch % self.config.checkpoint_config.save_every_n_epochs == 0:
@@ -348,24 +357,83 @@ class DinoTrainer:
         true_loss: float,
         momentum: float,
     ) -> None:
-        """Log per-batch diagnostics (center stats, gradient norms)."""
+        """Log per-batch diagnostics: training progress, teacher center health, and gradient flow."""
+
+        # --- INFO: training progress for current batch ---
         logger.info(
             f"Epoch {epoch} [{batch_idx + 1}/{num_batches}] "
-            f"Loss: {true_loss:.4f}, Momentum: {momentum:.4f}"
+            f"Loss: {true_loss:.4f} | EMA Momentum (teacher update rate): {momentum:.4f}"
         )
-        logger.debug(f"Loss infos: {self.loss_fn}")
 
+        # --- DEBUG: internal state of DINO loss (sharpening temperatures, center norm) ---
+        logger.debug(f"DINO loss internal state: {self.loss_fn}")
+
+        # --- DEBUG: teacher output center vector (EMA-updated, prevents representation collapse) ---
+        # The center is subtracted from teacher outputs before softmax to avoid trivial solutions
+        # where the teacher outputs a constant distribution for all inputs.
         c = self.loss_fn.get_center()
-        preview = ", ".join(f"{x:.4f}" for x in c.flatten()[:10].tolist())
+        preview = ", ".join(f"{x:.3f}" for x in c.flatten()[:8].tolist())
         logger.debug(
-            f"Center {list(c.shape)} | "
-            f"Norm: {c.norm():.4f} | "
-            f"μ: {c.mean():.4f} ± {c.std():.4f} | "
-            f"Range: [{c.min():.4f}, {c.max():.4f}] | "
-            f"Data: [{preview}, ...]"
+            f"Teacher center (EMA centering, collapse prevention) | "
+            f"shape={list(c.shape)} norm={c.norm():.4f} "
+            f"μ={c.mean():.4f} σ={c.std():.4f} "
+            f"range=[{c.min():.4f}, {c.max():.4f}] "
+            f"preview=[{preview}, ...]"
         )
 
-        logger.debug("Gradient norms:")
-        for name, param in self.student.named_parameters():
-            if param.requires_grad and param.grad is not None:
-                logger.debug(f"  {name}: {param.grad.data.norm(2).item():.4f}")
+        # --- DEBUG: student gradient norms per block (detect vanishing/exploding gradients) ---
+        grad_norms = {
+            name: param.grad.data.norm(2).item()
+            for name, param in self.student.named_parameters()
+            if param.requires_grad and param.grad is not None
+        }
+
+        if grad_norms:
+            total = sum(grad_norms.values())
+            max_name = max(grad_norms, key=grad_norms.get)
+            min_name = min(grad_norms, key=grad_norms.get)
+
+            logger.debug(
+                f"Student gradient norms (global) | "
+                f"total={total:.4f} "
+                f"max={grad_norms[max_name]:.4f} ({max_name}) "
+                f"min={grad_norms[min_name]:.4f} ({min_name})"
+            )
+
+            # Aggregate by transformer block to assess gradient flow across depth
+            # (shallow blocks like patch_embed should receive smaller gradients than head)
+            block_norms: dict[str, List[float]] = {}
+            for name, norm in grad_norms.items():
+                prefix = name.split(".")[0]
+                if prefix == "blocks":
+                    prefix = ".".join(name.split(".")[:2])  # e.g. blocks.0, blocks.11
+                block_norms.setdefault(prefix, []).append(norm)
+
+            block_summary = " | ".join(
+                f"{block}={sum(norms) / len(norms):.4f}"
+                for block, norms in block_norms.items()
+            )
+            logger.debug(f"Student gradient norms (avg per block) | {block_summary}")
+
+    def _run_knn(self, epoch: int):
+        knn_metrics = self.evaluator.evaluate(
+            model=self.teacher,
+            train_loader=self.train_eval_loader,
+            test_loader=self.val_eval_loader
+        )
+
+        plot_path = Path(self.config.evaluation_config.knn_plot_dir)
+        plot_path.mkdir(parents=True, exist_ok=True)
+        knn_plot_path = Path(plot_path, f"knn_eval_epoch_{epoch}.png")
+
+        # Log KNN metrics
+        log_metrics(knn_metrics, epoch, prefix="KNN Eval")
+        self.history.record_evaluation(epoch, knn_metrics)
+        self.evaluator.plot(self.teacher, self.val_eval_loader, save_path=knn_plot_path)
+        # wandb logging
+        if wandb is not None and wandb.run is not None:
+            wandb.log({
+                "epoch": epoch,
+                **{f"knn_eval/{k}": v for k, v in knn_metrics.items()},
+                "knn_eval/plot": wandb.Image(knn_plot_path)
+            })

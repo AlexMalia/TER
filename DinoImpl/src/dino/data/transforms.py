@@ -161,3 +161,23 @@ class DINOTransform:
             normalize_mean=augmentation.normalize_mean,
             normalize_std=augmentation.normalize_std,
         )
+    
+    @staticmethod
+    def get_base_transform() -> transforms.Compose:
+        """
+        Get a base transform that can be applied to validation/test data.
+
+        This should be a simple center crop + normalization without any random augmentations.
+
+        Returns:
+            A torchvision.transforms.Compose object for base transformations.
+        """
+        return transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                mean=(0.485, 0.456, 0.406),
+                std=(0.229, 0.224, 0.225)
+            ),
+        ])
