@@ -1688,6 +1688,7 @@ dependencies = [
     { name = "matplotlib", version = "3.7.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "matplotlib", version = "3.9.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
     { name = "matplotlib", version = "3.10.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
+    { name = "penman" },
     { name = "pyyaml" },
     { name = "scikit-learn", version = "1.3.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "scikit-learn", version = "1.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
@@ -1770,6 +1771,7 @@ requires-dist = [
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.24" },
     { name = "pandas", marker = "extra == 'visualize'", specifier = ">=1.3.0" },
+    { name = "penman", specifier = ">=1.3.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "pyyaml", specifier = ">=6.0" },
@@ -5788,6 +5790,15 @@ resolution-markers = [
 sdist = { url = "https://files.pythonhosted.org/packages/41/b9/6eb731b52f132181a9144bbe77ff82117f6b2d2fbfba49aaab2c014c4760/pathspec-1.0.2.tar.gz", hash = "sha256:fa32b1eb775ed9ba8d599b22c5f906dc098113989da2c00bf8b210078ca7fb92", size = 130502, upload-time = "2026-01-08T04:33:27.613Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/78/6b/14fc9049d78435fd29e82846c777bd7ed9c470013dc8d0260fff3ff1c11e/pathspec-1.0.2-py3-none-any.whl", hash = "sha256:62f8558917908d237d399b9b338ef455a814801a4688bc41074b25feefd93472", size = 54844, upload-time = "2026-01-08T04:33:26.4Z" },
+]
+
+[[package]]
+name = "penman"
+version = "1.3.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f4/0b/7e3738226fb73afc7aa75cc314968bc78d3e3e8dc343296f54c47a2470a9/penman-1.3.1.tar.gz", hash = "sha256:584a95947544c197bcee0e8c837f89e6f6fb7998327c0274a4d2beb473d8e135", size = 101331, upload-time = "2024-08-07T05:59:13.289Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/52/0e/d1bf14d77b929a0d054561e6d78b9932a3c1bb76fac665fbfbcf410afec9/penman-1.3.1-py3-none-any.whl", hash = "sha256:1444005a178e7ea2bcee2cc51c5f6aae6f7b1bb916a2764c7f1b5d0e304fcdca", size = 43413, upload-time = "2024-08-07T05:59:11.981Z" },
 ]
 
 [[package]]
