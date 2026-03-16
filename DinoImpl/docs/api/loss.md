@@ -14,6 +14,9 @@ API documentation for the loss module.
         - __init__
         - forward
         - from_config
+        - update_center
+        - get_center
+        - reset_center
 
 ---
 

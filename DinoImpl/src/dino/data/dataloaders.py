@@ -1,7 +1,7 @@
 """DataLoader creation utilities."""
 
 from torch.utils.data import DataLoader
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 import logging
 import torch
 
@@ -14,7 +14,7 @@ from ..config.config import DataConfig, AugmentationConfig
 logger = logging.getLogger(__name__)
 
 
-def collate_multi_crop(samples):
+def collate_multi_crop(samples: List[Tuple]) -> Tuple[List[torch.Tensor], torch.Tensor]:
     """
     Custom collate function for multi-crop batches.
 

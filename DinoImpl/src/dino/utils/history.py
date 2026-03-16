@@ -194,7 +194,7 @@ class History:
         logger.info(f"History loaded from {path}")
         return cls.from_dict(data)
 
-    def to_dataframe(self, level: str = 'iteration'):
+    def to_dataframe(self, level: str = 'iteration') -> Any:
         """
         Convert history to pandas DataFrame.
 
@@ -226,11 +226,11 @@ class History:
     def plot_loss(
         self,
         level: str = 'epoch',
-        ax=None,
+        ax: Optional[Any] = None,
         title: str = 'Training Loss',
         save_path: Optional[Union[str, Path]] = None,
-        **kwargs
-    ):
+        **kwargs: Any
+    ) -> Any:
         """
         Plot training loss curve.
 
@@ -257,11 +257,11 @@ class History:
     def plot_learning_rate(
         self,
         level: str = 'iteration',
-        ax=None,
+        ax: Optional[Any] = None,
         title: str = 'Learning Rate Schedule',
         save_path: Optional[Union[str, Path]] = None,
-        **kwargs
-    ):
+        **kwargs: Any
+    ) -> Any:
         """
         Plot learning rate over training.
 
@@ -288,11 +288,11 @@ class History:
     def plot_momentum(
         self,
         level: str = 'iteration',
-        ax=None,
+        ax: Optional[Any] = None,
         title: str = 'Teacher Momentum Schedule',
         save_path: Optional[Union[str, Path]] = None,
-        **kwargs
-    ):
+        **kwargs: Any
+    ) -> Any:
         """
         Plot teacher momentum over training.
 
@@ -373,12 +373,12 @@ class History:
         self,
         name: str,
         level: str,
-        ax=None,
+        ax: Optional[Any] = None,
         title: str = '',
         ylabel: str = '',
         save_path: Optional[Union[str, Path]] = None,
-        **kwargs
-    ):
+        **kwargs: Any
+    ) -> Any:
         """
         Internal method to plot a single metric.
 
@@ -421,7 +421,7 @@ class History:
         self,
         level: str = 'epoch',
         save_path: Optional[Union[str, Path]] = None
-    ):
+    ) -> Any:
         """
         Create a figure with all metrics in subplots.
 

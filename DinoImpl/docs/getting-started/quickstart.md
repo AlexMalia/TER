@@ -155,4 +155,3 @@ print(df.head())
 - [CLI Reference](cli-reference.md) - All command-line options
 - [Configuration](../guides/configuration.md) - Customize your training
 - [Models](../guides/models.md) - Available backbones and architectures
-- [Troubleshooting](../troubleshooting.md) - Common issues and solutions

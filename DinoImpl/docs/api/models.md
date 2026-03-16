@@ -15,6 +15,8 @@ API documentation for the models module.
         - forward
         - from_config
         - output_dim
+        - get_backbone_features
+        - parameter_count
 
 ---
 

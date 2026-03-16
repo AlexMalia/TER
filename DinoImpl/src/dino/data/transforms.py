@@ -3,6 +3,7 @@
 import torch
 from torchvision import transforms
 from typing import List, Tuple
+from PIL import Image
 from dino.config import AugmentationConfig
 
 class DINOTransform:
@@ -98,7 +99,7 @@ class DINOTransform:
             normalize,
         ])
 
-    def __call__(self, img) -> List[torch.Tensor]:
+    def __call__(self, img: Image.Image) -> List[torch.Tensor]:
         """
         Apply transformations to create multiple views.
 
