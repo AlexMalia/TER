@@ -13,6 +13,22 @@ from ..config.config import DataConfig, AugmentationConfig
 
 logger = logging.getLogger(__name__)
 
+def collate_graph_views(samples):
+    num_views = len(samples[0])
+    batch_size = len(samples)
+    views_batch = []
+
+    for view_idx in range(num_views):
+        view_dicts = [samples[i][view_idx] for i in range(batch_size)]
+        
+        # Stack each key into (B, N, L)
+        batched_view = {
+            key: torch.stack([d[key] for d in view_dicts], dim=0)
+            for key in view_dicts[0]
+        }
+        views_batch.append(batched_view)
+
+    return views_batch
 
 def collate_multi_crop(samples: List[Tuple]) -> Tuple[List[torch.Tensor], torch.Tensor]:
     """
@@ -76,6 +92,7 @@ def collate_multi_crop(samples: List[Tuple]) -> Tuple[List[torch.Tensor], torch.
 def create_train_dataloaders(
     data_config: DataConfig,
     augmentation_config: AugmentationConfig,
+    is_graph: bool = False
 ) -> DataLoader:
     """
     Create a training dataloader from config.
@@ -109,7 +126,7 @@ def create_train_dataloaders(
         shuffle=True,
         num_workers=data_config.num_workers,
         pin_memory=data_config.do_pin_memory,
-        collate_fn=collate_multi_crop,
+        collate_fn=collate_multi_crop if not is_graph else collate_graph_views,
         drop_last=True  # Drop last incomplete batch for stability
     )
 
