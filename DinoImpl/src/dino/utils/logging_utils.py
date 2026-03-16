@@ -70,6 +70,8 @@ def setup_logging(log_dir: str = './logs', log_level: str = "info") -> logging.L
     file_handler.setLevel(log_level)
     file_handler.setFormatter(detailed_formatter)
     logger.addHandler(file_handler)
+    logging.getLogger('matplotlib').setLevel(logging.WARNING)
+    logging.getLogger('PIL').setLevel(logging.WARNING)
 
     logger.info(f"Logging to {log_file}")
 

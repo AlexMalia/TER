@@ -21,11 +21,25 @@ check_kaggle_cli() {
         exit 1
     fi
 
-    if [ ! -f ~/.kaggle/kaggle.json ]; then
+    # Support new API tokens (KAGGLE_API_TOKEN), legacy env vars, and both file locations
+    local has_creds=false
+    [ -n "${KAGGLE_API_TOKEN:-}" ] && has_creds=true
+    [ -n "${KAGGLE_KEY:-}" ] && [ -n "${KAGGLE_USERNAME:-}" ] && has_creds=true
+    [ -f ~/.config/kaggle/credentials.json ] && has_creds=true
+    [ -f ~/.kaggle/kaggle.json ] && has_creds=true
+
+    if [ "$has_creds" = false ]; then
         echo "Error: Kaggle API credentials not found."
-        echo "1. Go to kaggle.com -> Account -> Create New API Token"
-        echo "2. Place kaggle.json in ~/.kaggle/"
-        echo "3. Run: chmod 600 ~/.kaggle/kaggle.json"
+        echo ""
+        echo "Option 1 - New API Token (Recommended, requires kaggle CLI >= 1.8.0):"
+        echo "  1. Go to kaggle.com -> Account -> Settings -> API -> Create New Token"
+        echo "  2. Set the token: export KAGGLE_API_TOKEN=<your_bearer_token>"
+        echo "     Or place credentials.json in ~/.config/kaggle/"
+        echo ""
+        echo "Option 2 - Legacy API Token:"
+        echo "  1. Go to kaggle.com -> Account -> Settings -> API -> Create New API Token"
+        echo "  2. Place kaggle.json in ~/.kaggle/"
+        echo "  3. Run: chmod 600 ~/.kaggle/kaggle.json"
         exit 1
     fi
 }
@@ -213,6 +227,51 @@ cmd_push_checkpoint() {
     echo "Checkpoint pushed! Next run will auto-resume from this checkpoint."
 }
 
+cmd_push_checkpoint_epoch() {
+    local epoch="${1:-}"
+    if [ -z "$epoch" ]; then
+        echo "Error: epoch number required."
+        echo "Usage: $0 push-checkpoint-epoch <N>"
+        exit 1
+    fi
+
+    local epoch_padded
+    epoch_padded=$(printf "%04d" "$epoch")
+    local filename="checkpoint_epoch_${epoch_padded}.pth"
+
+    echo "============================================"
+    echo "Pushing epoch checkpoint: $filename"
+    echo "============================================"
+
+    check_kaggle_cli
+
+    local checkpoint_file="$OUTPUT_DIR/checkpoints/$filename"
+
+    if [ ! -f "$checkpoint_file" ]; then
+        echo "No epoch checkpoint found in outputs. Downloading outputs first..."
+        cmd_output
+    fi
+
+    if [ ! -f "$checkpoint_file" ]; then
+        echo "Error: $filename not found in $OUTPUT_DIR/checkpoints/"
+        echo "Make sure training has run past epoch $epoch and outputs are downloaded."
+        exit 1
+    fi
+
+    cp "$checkpoint_file" "$CHECKPOINT_DATASET_DIR/"
+
+    echo "Pushing checkpoint dataset to Kaggle..."
+    if ! $KAGGLE_CMD datasets version -p "$CHECKPOINT_DATASET_DIR" -m "Epoch $epoch checkpoint $(date +%Y-%m-%d_%H:%M)" --dir-mode zip 2>/dev/null; then
+        echo "Dataset doesn't exist yet, creating it..."
+        $KAGGLE_CMD datasets create -p "$CHECKPOINT_DATASET_DIR" --dir-mode zip
+    fi
+
+    echo ""
+    echo "Done! To resume from epoch $epoch, set in your config:"
+    echo "  checkpoint_config:"
+    echo "    resume_from: /kaggle/input/dino-checkpoints/$filename"
+}
+
 cmd_help() {
     echo "Kaggle Manager for DINO Training"
     echo ""
@@ -224,17 +283,19 @@ cmd_help() {
     echo "  run               - Push code and run the training kernel"
     echo "  status            - Check kernel execution status"
     echo "  output            - Download training outputs"
-    echo "  push-checkpoint   - Push latest checkpoint for resume on next run"
-    echo "  logs              - Open kernel page in browser"
+    echo "  push-checkpoint         - Push latest checkpoint for resume on next run"
+    echo "  push-checkpoint-epoch N - Push a specific epoch checkpoint (e.g. epoch 60)"
+    echo "  logs                    - Open kernel page in browser"
 }
 
 case "${1:-help}" in
-    setup)            cmd_setup ;;
-    push-code)        cmd_push_code ;;
-    run)              cmd_run ;;
-    status)           cmd_status ;;
-    output)           cmd_output ;;
-    push-checkpoint)  cmd_push_checkpoint ;;
-    logs)             cmd_logs ;;
-    help|*)           cmd_help ;;
+    setup)                   cmd_setup ;;
+    push-code)               cmd_push_code ;;
+    run)                     cmd_run ;;
+    status)                  cmd_status ;;
+    output)                  cmd_output ;;
+    push-checkpoint)         cmd_push_checkpoint ;;
+    push-checkpoint-epoch)   cmd_push_checkpoint_epoch "${2:-}" ;;
+    logs)                    cmd_logs ;;
+    help|*)                  cmd_help ;;
 esac

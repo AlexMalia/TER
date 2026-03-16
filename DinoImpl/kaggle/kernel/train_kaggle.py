@@ -6,6 +6,7 @@ This script runs on Kaggle's GPU environment.
 It sets up the code from the uploaded dataset and runs training.
 """
 
+import math
 import os
 import sys
 import shutil
@@ -86,7 +87,7 @@ def install_dependencies():
         sys.executable, "-m", "pip", "install", "-q",
         "torch", "torchvision", "numpy", "pyyaml", "tqdm",
         "tensorboard", "scikit-learn", "matplotlib", "pillow",
-        "transformers>=4.46.3", "wandb>=0.23.1"
+        "timm", "transformers>=4.46.3", "wandb>=0.23.1"
     ], check=True)
 
     print("Dependencies installed.")
@@ -155,11 +156,12 @@ def run_training(device: str):
 
     # Import training modules (after setup)
     from dino.config.config import DinoConfig
-    from dino.data.dataloaders import create_dataloaders
+    from dino.data.dataloaders import create_train_dataloaders, create_eval_dataloaders
     from dino.models import DinoModel
     from dino.loss import DinoLoss
     from dino.training import DinoTrainer, create_optimizer, create_scheduler
     from dino.utils import setup_logging
+    from dino.evaluation.knn import KNNClassifier
     import torch
     import logging
 
@@ -176,6 +178,7 @@ def run_training(device: str):
 
     # Setup logging
     setup_logging(config.logging_config.log_dir, config.logging_config.log_verbosity)
+    torch.set_printoptions(profile="full", linewidth=200)
     logger = logging.getLogger(__name__)
 
     logger.info(f"Using config: {CONFIG_FILE}")
@@ -191,8 +194,9 @@ def run_training(device: str):
 
     # Create dataloaders
     logger.info("Creating dataloaders...")
-    train_loader, val_loader, _ = create_dataloaders(config.data_config, config.augmentation_config)
-    logger.info(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader) if val_loader else 0}")
+    train_loader = create_train_dataloaders(config.data_config, config.augmentation_config)
+    train_eval_loader, val_eval_loader, _ = create_eval_dataloaders(config.data_config, False)
+    logger.info(f"Created dataloaders: {len(train_loader)} train batches, {len(train_eval_loader)} train eval batches, {len(val_eval_loader)} val eval batches")
 
     # Create models using factory method
     logger.info("Creating models...")
@@ -222,7 +226,7 @@ def run_training(device: str):
 
     # Compute scheduler steps accounting for gradient accumulation
     accumulation_steps = config.training_config.gradient_accumulation_steps
-    updates_per_epoch = len(train_loader) // accumulation_steps
+    updates_per_epoch = math.ceil(len(train_loader) / accumulation_steps)
     total_steps = config.training_config.num_epochs * updates_per_epoch
     warmup_steps = config.scheduler_config.warmup_epochs * updates_per_epoch
 
@@ -239,17 +243,29 @@ def run_training(device: str):
         f"(accumulation_steps={accumulation_steps})"
     )
 
+    # Create evaluator
+    evaluator = None
+    if config.evaluation_config.use_knn_eval:
+        evaluator = KNNClassifier(
+            ks=config.evaluation_config.knn_ks,
+            temperature=config.evaluation_config.knn_temperature,
+            batch_size=config.evaluation_config.knn_batch_size,
+            device=device
+        )
+
     # Create trainer
     trainer = DinoTrainer(
-        config=config.training_config,
+        config=config,
         student=student,
         teacher=teacher,
         optimizer=optimizer,
         scheduler=scheduler,
         loss_fn=dino_loss,
         train_loader=train_loader,
-        val_loader=val_loader,
-        device=device
+        train_eval_loader=train_eval_loader,
+        val_eval_loader=val_eval_loader,
+        device=device,
+        evaluator=evaluator
     )
 
     # Resume from checkpoint if specified, or auto-detect from input datasets
@@ -296,12 +312,18 @@ def run_training(device: str):
                 id=wandb_run_id,
                 resume="allow",
                 config=config.to_dict(),
+                save_code=True,
                 tags=[config.model_config.backbone, config.data_config.dataset, "kaggle"],
             )
             wandb.define_metric("iteration")
             wandb.define_metric("epoch")
             wandb.define_metric("train/*", step_metric="iteration")
             wandb.define_metric("epoch/*", step_metric="epoch")
+            wandb.config.update({
+                "total_steps": total_steps,
+                "warmup_steps": warmup_steps,
+                "param_count": param_count['total'],
+            }, allow_val_change=True)
         except ImportError:
             logger.warning("wandb not installed, skipping")
             config.logging_config.use_wandb = False

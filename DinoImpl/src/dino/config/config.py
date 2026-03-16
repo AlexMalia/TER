@@ -4,7 +4,7 @@ from dataclasses import dataclass, field, asdict
 import argparse
 import logging
 from pathlib import Path
-from typing import  Tuple
+from typing import  Tuple, List
 import yaml
 
 
@@ -142,6 +142,17 @@ class LoggingConfig:
     wandb_entity: str
     wandb_run_name: str
 
+@dataclass
+class EvaluationConfig:
+    """Evaluation configuration."""
+
+    use_knn_eval: bool
+    eval_every_n_epochs: int
+    knn_ks: List[int]
+    knn_temperature: float
+    knn_batch_size: int
+    knn_plot_dir: str
+
 
 _CONFIG_CLASSES = {
     'data_config': DataConfig,
@@ -153,6 +164,7 @@ _CONFIG_CLASSES = {
     'training_config': TrainingConfig,
     'checkpoint_config': CheckpointConfig,
     'logging_config': LoggingConfig,
+    'evaluation_config': EvaluationConfig,
 }
 
 _ARG_MAPPING = {
@@ -186,6 +198,7 @@ class DinoConfig:
     training_config: TrainingConfig
     checkpoint_config: CheckpointConfig
     logging_config: LoggingConfig
+    evaluation_config: EvaluationConfig
 
     def to_dict(self):
         """Convert configuration to dictionary."""

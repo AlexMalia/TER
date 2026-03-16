@@ -53,7 +53,6 @@ Checkpoints are saved automatically during training:
 checkpoint_config:
   checkpoint_dir: ./checkpoints/imagenette/vits16
   save_every_n_epochs: 1
-  save_best: true
   resume_from: null
 ```
 

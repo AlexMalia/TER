@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import math
 import sys
 from pathlib import Path
 import numpy as np
@@ -9,11 +10,13 @@ import torch
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from dino.config.config import DinoConfig
-from dino.data.dataloaders import create_dataloaders
+from dino.data.dataloaders import create_train_dataloaders, create_eval_dataloaders
 from dino.models import DinoModel
 from dino.loss import DinoLoss
 from dino.training import DinoTrainer, create_optimizer, create_scheduler
 from dino.utils import setup_logging, find_latest_checkpoint
+from dino.evaluation.knn import KNNClassifier
+
 import logging
 
 
@@ -90,8 +93,9 @@ def main():
 
     # Create dataloaders
     logger.info("Creating dataloaders...")
-    train_loader, val_loader, _ = create_dataloaders(config.data_config, config.augmentation_config)
-    logger.info(f"Created dataloaders: {len(train_loader)} train batches")
+    train_loader = create_train_dataloaders(config.data_config, config.augmentation_config)
+    train_eval_loader, val_eval_loader, _ = create_eval_dataloaders(config.data_config, False)
+    logger.info(f"Created dataloaders: {len(train_loader)} train batches, {len(train_eval_loader)} train eval batches, {len(val_eval_loader)} val eval batches")
 
     # Create models
     logger.info("Creating models...")
@@ -121,8 +125,8 @@ def main():
 
     accumulation_steps = config.training_config.gradient_accumulation_steps
 
-    # Nombre de vraies updates par epoch (pas le nombre de forward passes)
-    updates_per_epoch = len(train_loader) // accumulation_steps
+    # Nb of actual updates per epoch (not the number of forward passes)
+    updates_per_epoch = math.ceil(len(train_loader) / accumulation_steps)
 
     total_steps = config.training_config.num_epochs * updates_per_epoch
     warmup_steps = config.scheduler_config.warmup_epochs * updates_per_epoch
@@ -140,6 +144,11 @@ def main():
         f"(accumulation_steps={accumulation_steps})"
     )
 
+    #Create evaluator
+    evaluator = None
+    if config.evaluation_config.use_knn_eval:
+        evaluator = KNNClassifier.from_config(config.evaluation_config, device)
+
     # Create trainer
     trainer = DinoTrainer(
         config=config,
@@ -149,8 +158,10 @@ def main():
         scheduler=optim_scheduler,
         loss_fn=dino_loss,
         train_loader=train_loader,
-        val_loader=val_loader,
-        device=device
+        train_eval_loader=train_eval_loader,
+        val_eval_loader=val_eval_loader,
+        device=device,
+        evaluator=evaluator
     )
 
     # Resume from checkpoint if specified
