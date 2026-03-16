@@ -1683,6 +1683,8 @@ name = "dino-pytorch"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "kaggle", version = "1.7.4.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "kaggle", version = "1.8.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "matplotlib", version = "3.7.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "matplotlib", version = "3.9.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
     { name = "matplotlib", version = "3.10.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
@@ -1756,6 +1758,7 @@ requires-dist = [
     { name = "ipykernel", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.10.0" },
     { name = "jupyter", marker = "extra == 'notebooks'", specifier = ">=1.0.0" },
+    { name = "kaggle", specifier = ">=1.7.4.5" },
     { name = "kaggle", marker = "extra == 'kaggle'", specifier = ">=1.7.4.5" },
     { name = "matplotlib", specifier = ">=3.7.5" },
     { name = "matplotlib", marker = "extra == 'visualize'", specifier = ">=3.5.0" },

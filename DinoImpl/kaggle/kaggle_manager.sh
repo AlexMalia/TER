@@ -21,11 +21,25 @@ check_kaggle_cli() {
         exit 1
     fi
 
-    if [ ! -f ~/.kaggle/kaggle.json ]; then
+    # Support new API tokens (KAGGLE_API_TOKEN), legacy env vars, and both file locations
+    local has_creds=false
+    [ -n "${KAGGLE_API_TOKEN:-}" ] && has_creds=true
+    [ -n "${KAGGLE_KEY:-}" ] && [ -n "${KAGGLE_USERNAME:-}" ] && has_creds=true
+    [ -f ~/.config/kaggle/credentials.json ] && has_creds=true
+    [ -f ~/.kaggle/kaggle.json ] && has_creds=true
+
+    if [ "$has_creds" = false ]; then
         echo "Error: Kaggle API credentials not found."
-        echo "1. Go to kaggle.com -> Account -> Create New API Token"
-        echo "2. Place kaggle.json in ~/.kaggle/"
-        echo "3. Run: chmod 600 ~/.kaggle/kaggle.json"
+        echo ""
+        echo "Option 1 - New API Token (Recommended, requires kaggle CLI >= 1.8.0):"
+        echo "  1. Go to kaggle.com -> Account -> Settings -> API -> Create New Token"
+        echo "  2. Set the token: export KAGGLE_TOKEN=<your_bearer_token>"
+        echo "     Or place credentials.json in ~/.config/kaggle/"
+        echo ""
+        echo "Option 2 - Legacy API Token:"
+        echo "  1. Go to kaggle.com -> Account -> Settings -> API -> Create New API Token"
+        echo "  2. Place kaggle.json in ~/.kaggle/"
+        echo "  3. Run: chmod 600 ~/.kaggle/kaggle.json"
         exit 1
     fi
 }
