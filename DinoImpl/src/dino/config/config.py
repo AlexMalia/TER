@@ -4,7 +4,7 @@ from dataclasses import dataclass, field, asdict
 import argparse
 import logging
 from pathlib import Path
-from typing import  Tuple
+from typing import  Tuple, List
 import yaml
 
 
@@ -148,7 +148,7 @@ class EvaluationConfig:
 
     use_knn_eval: bool
     eval_every_n_epochs: int
-    knn_ks: list[int]
+    knn_ks: List[int]
     knn_temperature: float
     knn_batch_size: int
     knn_plot_dir: str

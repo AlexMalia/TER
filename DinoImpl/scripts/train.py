@@ -147,12 +147,7 @@ def main():
     #Create evaluator
     evaluator = None
     if config.evaluation_config.use_knn_eval:
-        evaluator = KNNClassifier(
-            ks=config.evaluation_config.knn_ks,
-            temperature=config.evaluation_config.knn_temperature,
-            batch_size=config.evaluation_config.knn_batch_size,
-            device=device
-        )
+        evaluator = KNNClassifier.from_config(config.evaluation_config, device)
 
     # Create trainer
     trainer = DinoTrainer(

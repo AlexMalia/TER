@@ -18,7 +18,7 @@ Example usage:
     python scripts/visualize.py --history checkpoints/checkpoint_epoch_0010_history.json
 
     # Plot KNN accuracy
-     python scripts/visualize.py --metric knn
+    python scripts/visualize.py --metric knn
 
     # Save KNN plot
     python scripts/visualize.py --metric knn --save plots/knn.png

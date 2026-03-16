@@ -4,7 +4,7 @@ import math
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 import logging
 from tqdm import tqdm
 from torch.optim.lr_scheduler import LRScheduler
@@ -58,8 +58,10 @@ class DinoTrainer:
         optimizer: Optimizer
         loss_fn: Loss function
         train_loader: Training data loader
-        val_loader: Optional validation data loader
         device: Device to train on
+        train_eval_loader: Optional data loader for evaluating on the training set.
+        val_eval_loader: Optional data loader for evaluating on the validation set.
+        evaluator: Optional Evaluator used for downstream evaluation.
     """
 
     def __init__(
@@ -400,7 +402,7 @@ class DinoTrainer:
 
             # Aggregate by transformer block to assess gradient flow across depth
             # (shallow blocks like patch_embed should receive smaller gradients than head)
-            block_norms: dict[str, list[float]] = {}
+            block_norms: dict[str, List[float]] = {}
             for name, norm in grad_norms.items():
                 prefix = name.split(".")[0]
                 if prefix == "blocks":

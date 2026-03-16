@@ -6,7 +6,6 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 import logging
 from torch.optim.lr_scheduler import LRScheduler
-import numpy as np
 
 from ..config import DinoConfig
 from .history import History

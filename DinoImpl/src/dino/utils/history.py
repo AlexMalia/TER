@@ -319,55 +319,55 @@ class History:
 
 
     def plot_knn(self, k_values=None, ax=None, title='KNN Accuracy', save_path=None, **kwargs):
-     """Plot KNN top-1 and top-5 accuracy over epochs.
+        """Plot KNN top-1 and top-5 accuracy over epochs.
 
-     Args:
-         k_values: k values to plot. If None, auto-detected from stored metrics.
-         ax: Optional existing matplotlib axes.
-         title: Plot title.
-         save_path: Optional path to save the figure.
+        Args:
+            k_values: k values to plot. If None, auto-detected from stored metrics.
+            ax: Optional existing matplotlib axes.
+            title: Plot title.
+            save_path: Optional path to save the figure.
 
-     Returns:
-         matplotlib.axes.Axes
-     """
-     if not self.evaluation_metrics:
-         logger.warning("No evaluation metrics recorded, skipping plot_knn")
-         return None
+        Returns:
+            matplotlib.axes.Axes
+        """
+        if not self.evaluation_metrics:
+            logger.warning("No evaluation metrics recorded, skipping plot_knn")
+            return None
 
-     # Auto-detect k values from first recorded entry
-     if k_values is None:
-         sample = self.evaluation_metrics[0]
-         k_values = sorted([
-             int(key.split('_k')[1])
-             for key in sample
-             if key.startswith('knn_top1_k')
-         ])
+        # Auto-detect k values from first recorded entry
+        if k_values is None:
+            sample = self.evaluation_metrics[0]
+            k_values = sorted([
+                int(key.split('_k')[1])
+                for key in sample
+                if key.startswith('knn_top1_k')
+            ])
 
-     epochs = [m['epoch'] for m in self.evaluation_metrics]
+        epochs = [m['epoch'] for m in self.evaluation_metrics]
 
-     created_fig = ax is None
-     if created_fig:
-         fig, ax = plt.subplots(figsize=(10, 6))
+        created_fig = ax is None
+        if created_fig:
+            fig, ax = plt.subplots(figsize=(10, 6))
 
-     for k in k_values:
-         top1 = [m.get(f'knn_top1_k{k}') for m in self.evaluation_metrics]
-         top5 = [m.get(f'knn_top5_k{k}') for m in self.evaluation_metrics]
+        for k in k_values:
+            top1 = [m.get(f'knn_top1_k{k}') for m in self.evaluation_metrics]
+            top5 = [m.get(f'knn_top5_k{k}') for m in self.evaluation_metrics]
 
-         ax.plot(epochs, top1, label=f'Top-1 k={k}', **kwargs)
-         if any(v is not None for v in top5):
-             ax.plot(epochs, top5, label=f'Top-5 k={k}', linestyle='--', **kwargs)
+            ax.plot(epochs, top1, label=f'Top-1 k={k}', **kwargs)
+            if any(v is not None for v in top5):
+                ax.plot(epochs, top5, label=f'Top-5 k={k}', linestyle='--', **kwargs)
 
-     ax.set_xlabel('Epoch')
-     ax.set_ylabel('Accuracy (%)')
-     ax.set_title(title)
-     ax.legend()
-     ax.grid(True, alpha=0.3)
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel('Accuracy (%)')
+        ax.set_title(title)
+        ax.legend()
+        ax.grid(True, alpha=0.3)
 
-     if save_path and created_fig:
-         plt.savefig(save_path, dpi=150, bbox_inches='tight')
-         logger.info(f"Plot saved to {save_path}")
+        if save_path and created_fig:
+            plt.savefig(save_path, dpi=150, bbox_inches='tight')
+            logger.info(f"Plot saved to {save_path}")
 
-     return ax
+        return ax
 
     def _plot_metric(
         self,

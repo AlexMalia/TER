@@ -33,7 +33,7 @@ check_kaggle_cli() {
         echo ""
         echo "Option 1 - New API Token (Recommended, requires kaggle CLI >= 1.8.0):"
         echo "  1. Go to kaggle.com -> Account -> Settings -> API -> Create New Token"
-        echo "  2. Set the token: export KAGGLE_TOKEN=<your_bearer_token>"
+        echo "  2. Set the token: export KAGGLE_API_TOKEN=<your_bearer_token>"
         echo "     Or place credentials.json in ~/.config/kaggle/"
         echo ""
         echo "Option 2 - Legacy API Token:"

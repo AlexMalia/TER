@@ -91,11 +91,12 @@ class KNNClassifier(Evaluator):
 
     
     @classmethod
-    def from_config(cls, evaluate_config: EvaluationConfig):
+    def from_config(cls, evaluate_config: EvaluationConfig, device: str):
         return cls(
             ks=evaluate_config.knn_ks,
             temperature=evaluate_config.knn_temperature,
-            batch_size=evaluate_config.knn_batch_size
+            batch_size=evaluate_config.knn_batch_size,
+            device=device
         )
     
 

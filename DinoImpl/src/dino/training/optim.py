@@ -92,9 +92,8 @@ def create_scheduler(
     if scheduler_name == "cosine_warmup":
         if warmup_steps >= total_steps:
             raise ValueError(
-                f"warmup_epochs ({scheduler_config.warmup_epochs}) must be less than "
-                f"num_epochs ({total_steps // (total_steps // warmup_steps)}). "
-                f"Got warmup_steps={warmup_steps} >= total_steps={total_steps}."
+                f"Invalid warmup configuration: warmup_steps ({warmup_steps}) must be"
+                f"Less than total_steps ({total_steps}). Configured warmup_epochs={scheduler_config.warmup_epochs}"
             )
         # Calculate warmup start factor
         start_factor = scheduler_config.warmup_start_lr / optimizer_config.lr \

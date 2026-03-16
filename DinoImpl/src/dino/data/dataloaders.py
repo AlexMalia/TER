@@ -76,21 +76,16 @@ def collate_multi_crop(samples):
 def create_train_dataloaders(
     data_config: DataConfig,
     augmentation_config: AugmentationConfig,
-    return_test: bool = False
-) -> Tuple[DataLoader, Optional[DataLoader], Optional[DataLoader]]:
+) -> DataLoader:
     """
-    Create train, validation, and optionally test dataloaders from config.
-
-    Supports both standard datasets (downloaded) and.
+    Create a training dataloader from config.
 
     Args:
         data_config: DataConfig instance
         augmentation_config: AugmentationConfig instance
-        return_test: Whether to return test dataloader
 
     Returns:
-        Tuple of (train_loader, val_loader, test_loader)
-        If return_test is False, test_loader will be None
+        DataLoader: Training dataloader.
     """
 
     # Create transform
