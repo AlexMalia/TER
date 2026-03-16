@@ -9,6 +9,8 @@ from torchvision.datasets import ImageFolder
 from typing import Tuple, Optional, Callable, List
 import logging
 
+from .custom_datasets import AMRGraphDataset
+
 logger = logging.getLogger(__name__)
 
 
@@ -93,6 +95,10 @@ def get_dataset(
             val_dataset = ImageFolder(root=val_path, transform=transform)
             logger.info(f"Loaded ImageNet100 val split with {len(val_dataset)} samples")
             return val_dataset
+    elif dataset_name == 'amrgraph':
+        dataset = AMRGraphDataset(amr_file=data_path)
+        logger.info(f"Loaded AMRGraphDataset with {len(dataset)} samples from {data_path}")
+        return dataset
     else:
         raise ValueError(
             f"Unknown dataset: {dataset_name}. "
