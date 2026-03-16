@@ -131,8 +131,23 @@ def create_eval_dataloaders(
     data_config: DataConfig,
     return_test: bool = False
 ) -> Tuple[DataLoader, DataLoader, Optional[DataLoader]]:
+    """
+    Create eval dataloaders (no augmentation) for train, val, and optionally test sets.
+
+    The val and test loaders are derived from the test split of the dataset,
+    divided 50/50 via create_train_val_test_splits.
+
+    Args:
+        data_config: DataConfig instance
+        return_test: Whether to return a test dataloader
+
+    Returns:
+        Tuple of (train_eval_loader, val_loader, test_loader)
+        If return_test is False, test_loader will be None
+    """
     base_transform = DINOTransform.get_base_transform()
 
+    # Load train set (no augmentation, for eval of train representations)
     train_dataset = get_dataset(
         dataset_name=data_config.dataset,
         data_path=data_config.data_path,
@@ -141,7 +156,8 @@ def create_eval_dataloaders(
         train=True
     )
 
-    test_dataset = get_dataset(
+    # Load test set, then split into val/test halves
+    full_test_dataset = get_dataset(
         dataset_name=data_config.dataset,
         data_path=data_config.data_path,
         transform=base_transform,
@@ -149,46 +165,23 @@ def create_eval_dataloaders(
         train=False
     )
 
-    # Create dataloaders
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=data_config.batch_size,
-        shuffle=False,
-        num_workers=data_config.num_workers,
-        pin_memory=data_config.do_pin_memory
-    )
-    """
-    Args:
-        dataset: Full dataset
-        train_split: Fraction of data for training
-        val_split: Fraction of data for validation
-        seed: Random seed for reproducibility
-        """
     _, val_dataset, test_dataset = create_train_val_test_splits(
-        dataset=test_dataset,
+        dataset=full_test_dataset,
         train_split=0.0,
-        val_split=0.5, 
+        val_split=0.5,
         seed=data_config.seed
     )
 
-    val_loader = DataLoader(
-        val_dataset,
+    loader_kwargs = dict(
         batch_size=data_config.batch_size,
         shuffle=False,
         num_workers=data_config.num_workers,
         pin_memory=data_config.do_pin_memory
     )
 
-    if return_test:
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=data_config.batch_size,
-            shuffle=False,
-            num_workers=data_config.num_workers,
-            pin_memory=data_config.do_pin_memory
-        )
-    else:
-        test_loader = None
+    train_loader = DataLoader(train_dataset, **loader_kwargs)
+    val_loader = DataLoader(val_dataset, **loader_kwargs)
+    test_loader = DataLoader(test_dataset, **loader_kwargs) if return_test else None
 
     logger.info(
         f"Created eval dataloaders: "
