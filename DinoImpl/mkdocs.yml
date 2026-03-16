@@ -90,18 +90,13 @@ nav:
     - Loss Function: guides/loss-function.md
     - Configuration: guides/configuration.md
     - Checkpointing: guides/checkpointing.md
-  - Advanced:
-    - Extending DINO: advanced/extending.md
-    - Performance: advanced/performance.md
-    - Design Decisions: advanced/design-decisions.md
-    - Testing: advanced/testing.md
   - API Reference:
     - Models: api/models.md
     - Data: api/data.md
     - Loss: api/loss.md
     - Training: api/training.md
     - Utils: api/utils.md
-  - Troubleshooting: troubleshooting.md
+  - Kaggle: kaggle-guide.md
 
 extra:
   social:
