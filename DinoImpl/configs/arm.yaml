@@ -37,7 +37,7 @@ model_config:
   projection_hidden_dim: 2048
   projection_bottleneck_dim: 256
   projection_output_dim: 4096
-  use_weight_norm: false
+  use_weight_norm: true
 
 loss_config:
   student_temp: 0.1
@@ -46,7 +46,7 @@ loss_config:
 
 optimizer_config:
   optimizer: adamw
-  lr: 0.001
+  lr: 0.0003
   weight_decay: 0.04
   betas: [0.9, 0.999]
   eps: 1.0e-08
