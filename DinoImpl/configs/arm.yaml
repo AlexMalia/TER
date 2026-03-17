@@ -1,7 +1,7 @@
 data_config:
   dataset: amrgraph
   data_path: ./dataset/amrs.json
-  batch_size: 8
+  batch_size: 16
   num_workers: 4
   do_pin_memory: true
   train_split: 0.85
@@ -46,14 +46,14 @@ loss_config:
 
 optimizer_config:
   optimizer: adamw
-  lr: 0.0003
+  lr: 5e-5
   weight_decay: 0.04
   betas: [0.9, 0.999]
   eps: 1.0e-08
 
 scheduler_config:
   scheduler: cosine_warmup
-  warmup_epochs: 10
+  warmup_epochs: 20
   min_lr: 1.0e-06
   warmup_start_lr: 0.0
 
@@ -75,7 +75,7 @@ checkpoint_config:
 logging_config:
   log_dir: ./outputs/logs/imagenette/vits16-test-resume
   log_every_n_iters: 50
-  log_verbosity: info
+  log_verbosity: debug
   use_wandb: true
   wandb_project: "dino-graph-tests"
   wandb_entity: null
