@@ -99,7 +99,7 @@ class AMRGraphDatasetGlobal(Dataset):
             triples = [(s, r, t) for s, r, t in graph.triples if r != ":instance"]
 
             # Un seul DFS par graphe depuis le root
-            all_neighbors = self._dfs_neighbors(graph, root, node_concept, triples)
+            all_neighbors = self._dfs_neighbors(root, node_concept, triples)
 
             if all_neighbors:
                 root_concept = node_concept.get(root, root)

@@ -10,8 +10,12 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 CODE_DATASET_DIR="$SCRIPT_DIR/code-dataset"
 CHECKPOINT_DATASET_DIR="$SCRIPT_DIR/checkpoint-dataset"
+AMR_DATASET_DIR="$SCRIPT_DIR/amr-dataset"
+AMR_CHECKPOINT_DATASET_DIR="$SCRIPT_DIR/amr-checkpoint-dataset"
 KERNEL_DIR="$SCRIPT_DIR/kernel"
+AMR_KERNEL_DIR="$SCRIPT_DIR/amr-kernel"
 OUTPUT_DIR="$SCRIPT_DIR/outputs"
+AMR_OUTPUT_DIR="$SCRIPT_DIR/amr-outputs"
 
 KAGGLE_CMD="uv run kaggle"
 
@@ -52,7 +56,10 @@ update_username() {
 
     sed -i "s/YOUR_KAGGLE_USERNAME/$KAGGLE_USERNAME/g" "$CODE_DATASET_DIR/dataset-metadata.json" 2>/dev/null || true
     sed -i "s/YOUR_KAGGLE_USERNAME/$KAGGLE_USERNAME/g" "$CHECKPOINT_DATASET_DIR/dataset-metadata.json" 2>/dev/null || true
+    sed -i "s/YOUR_KAGGLE_USERNAME/$KAGGLE_USERNAME/g" "$AMR_DATASET_DIR/dataset-metadata.json" 2>/dev/null || true
+    sed -i "s/YOUR_KAGGLE_USERNAME/$KAGGLE_USERNAME/g" "$AMR_CHECKPOINT_DATASET_DIR/dataset-metadata.json" 2>/dev/null || true
     sed -i "s/YOUR_KAGGLE_USERNAME/$KAGGLE_USERNAME/g" "$KERNEL_DIR/kernel-metadata.json" 2>/dev/null || true
+    sed -i "s/YOUR_KAGGLE_USERNAME/$KAGGLE_USERNAME/g" "$AMR_KERNEL_DIR/kernel-metadata.json" 2>/dev/null || true
 }
 
 prepare_code_dataset() {
@@ -68,6 +75,16 @@ prepare_code_dataset() {
     cp -r "$PROJECT_ROOT/scripts" "$CODE_DATASET_DIR/"
     cp "$PROJECT_ROOT/pyproject.toml" "$CODE_DATASET_DIR/"
     cp "$PROJECT_ROOT/uv.lock" "$CODE_DATASET_DIR/"
+
+    # Copy Graphformers source (required for AMR training)
+    GRAPHFORMERS_SRC="$(dirname "$PROJECT_ROOT")/Graphformers"
+    if [ -d "$GRAPHFORMERS_SRC" ]; then
+        rm -rf "$CODE_DATASET_DIR/graphformers_src"
+        cp -r "$GRAPHFORMERS_SRC" "$CODE_DATASET_DIR/graphformers_src"
+        echo "Graphformers source copied to code dataset"
+    else
+        echo "WARNING: Graphformers/src not found at $GRAPHFORMERS_SRC"
+    fi
 
     # Créer .kaggleignore
     cat > "$CODE_DATASET_DIR/.kaggleignore" << 'EOF'
@@ -272,12 +289,147 @@ cmd_push_checkpoint_epoch() {
     echo "    resume_from: /kaggle/input/dino-checkpoints/$filename"
 }
 
+prepare_amr_dataset() {
+    echo "Preparing AMR dataset..."
+
+    # Copy JSON files from dataset/
+    mkdir -p "$AMR_DATASET_DIR"
+    cp "$PROJECT_ROOT"/dataset/*.json "$AMR_DATASET_DIR/"
+
+    echo "AMR dataset prepared at: $AMR_DATASET_DIR"
+}
+
+cmd_setup_amr() {
+    echo "============================================"
+    echo "Setting up AMR dataset and kernel on Kaggle"
+    echo "============================================"
+
+    check_kaggle_cli
+    update_username
+    prepare_amr_dataset
+
+    # Create AMR dataset
+    echo ""
+    echo "Creating AMR dataset on Kaggle..."
+    $KAGGLE_CMD datasets create -p "$AMR_DATASET_DIR" --dir-mode zip
+
+    # Create AMR checkpoint dataset
+    mkdir -p "$AMR_CHECKPOINT_DATASET_DIR"
+    if [ ! -f "$AMR_CHECKPOINT_DATASET_DIR/dataset-metadata.json" ]; then
+        cat > "$AMR_CHECKPOINT_DATASET_DIR/dataset-metadata.json" << 'EOF'
+{
+  "title": "DINO AMR Checkpoints",
+  "id": "alexdelaveau/dino-amr-checkpoints",
+  "licenses": [{ "name": "CC0-1.0" }]
+}
+EOF
+    fi
+    touch "$AMR_CHECKPOINT_DATASET_DIR/.gitkeep"
+    echo ""
+    echo "Creating AMR checkpoint dataset on Kaggle..."
+    $KAGGLE_CMD datasets create -p "$AMR_CHECKPOINT_DATASET_DIR" --dir-mode zip
+
+    echo ""
+    echo "AMR setup complete!"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Run './kaggle/kaggle_manager.sh run-amr' to start AMR training"
+    echo "  2. Run './kaggle/kaggle_manager.sh status-amr' to check progress"
+}
+
+cmd_push_amr_data() {
+    echo "============================================"
+    echo "Updating AMR dataset on Kaggle"
+    echo "============================================"
+
+    check_kaggle_cli
+    prepare_amr_dataset
+
+    $KAGGLE_CMD datasets version -p "$AMR_DATASET_DIR" -m "AMR data update $(date +%Y-%m-%d_%H:%M)" --dir-mode zip
+
+    echo "AMR dataset updated!"
+}
+
+cmd_run_amr() {
+    echo "============================================"
+    echo "Pushing and running AMR training kernel"
+    echo "============================================"
+
+    check_kaggle_cli
+    cmd_push_code
+    cmd_push_amr_data
+
+    echo ""
+    echo "Waiting 30s for datasets to propagate on Kaggle..."
+    sleep 30
+
+    echo "Pushing AMR kernel to Kaggle..."
+    cd "$AMR_KERNEL_DIR"
+    $KAGGLE_CMD kernels push -p .
+
+    echo ""
+    echo "AMR Kernel submitted!"
+    echo "View at: https://www.kaggle.com/$KAGGLE_USERNAME/dino-amr-training"
+    echo ""
+    echo "Run './kaggle/kaggle_manager.sh status-amr' to check progress"
+}
+
+cmd_status_amr() {
+    check_kaggle_cli
+    $KAGGLE_CMD kernels status "$KAGGLE_USERNAME/dino-amr-training"
+}
+
+cmd_output_amr() {
+    check_kaggle_cli
+    mkdir -p "$AMR_OUTPUT_DIR"
+    cd "$AMR_OUTPUT_DIR"
+    $KAGGLE_CMD kernels output "$KAGGLE_USERNAME/dino-amr-training" -p .
+    echo "AMR outputs downloaded to: $AMR_OUTPUT_DIR"
+    ls -la "$AMR_OUTPUT_DIR"
+}
+
+cmd_push_amr_checkpoint() {
+    echo "============================================"
+    echo "Pushing AMR checkpoint to Kaggle dataset"
+    echo "============================================"
+
+    check_kaggle_cli
+
+    local checkpoint_file="$AMR_OUTPUT_DIR/checkpoints/checkpoint_latest.pth"
+    local history_file="$AMR_OUTPUT_DIR/checkpoints/history_latest.json"
+
+    if [ ! -f "$checkpoint_file" ]; then
+        echo "No checkpoint found in AMR outputs. Downloading outputs first..."
+        cmd_output_amr
+    fi
+
+    if [ ! -f "$checkpoint_file" ]; then
+        echo "Error: No checkpoint_latest.pth found in $AMR_OUTPUT_DIR/checkpoints/"
+        exit 1
+    fi
+
+    mkdir -p "$AMR_CHECKPOINT_DATASET_DIR"
+    cp "$checkpoint_file" "$AMR_CHECKPOINT_DATASET_DIR/"
+    if [ -f "$history_file" ]; then
+        cp "$history_file" "$AMR_CHECKPOINT_DATASET_DIR/"
+    fi
+
+    echo "Pushing AMR checkpoint dataset to Kaggle..."
+    if ! $KAGGLE_CMD datasets version -p "$AMR_CHECKPOINT_DATASET_DIR" -m "AMR checkpoint $(date +%Y-%m-%d_%H:%M)" --dir-mode zip 2>/dev/null; then
+        echo "Dataset doesn't exist yet, creating it..."
+        $KAGGLE_CMD datasets create -p "$AMR_CHECKPOINT_DATASET_DIR" --dir-mode zip
+    fi
+
+    echo ""
+    echo "AMR checkpoint pushed! Next run will auto-resume from this checkpoint."
+}
+
 cmd_help() {
     echo "Kaggle Manager for DINO Training"
     echo ""
     echo "Usage: $0 [command]"
     echo ""
-    echo "Commands:"
+    echo "Commands (Image):"
     echo "  setup             - Initial setup: create datasets and kernel on Kaggle"
     echo "  push-code         - Upload/update code dataset to Kaggle"
     echo "  run               - Push code and run the training kernel"
@@ -286,6 +438,14 @@ cmd_help() {
     echo "  push-checkpoint         - Push latest checkpoint for resume on next run"
     echo "  push-checkpoint-epoch N - Push a specific epoch checkpoint (e.g. epoch 60)"
     echo "  logs                    - Open kernel page in browser"
+    echo ""
+    echo "Commands (AMR / Graph):"
+    echo "  setup-amr         - Initial setup: create AMR dataset and kernel on Kaggle"
+    echo "  push-amr-data     - Upload/update AMR JSON dataset to Kaggle"
+    echo "  run-amr           - Push code + data and run the AMR training kernel"
+    echo "  status-amr        - Check AMR kernel execution status"
+    echo "  output-amr        - Download AMR training outputs"
+    echo "  push-amr-checkpoint     - Push latest AMR checkpoint for resume on next run"
 }
 
 case "${1:-help}" in
@@ -297,5 +457,11 @@ case "${1:-help}" in
     push-checkpoint)         cmd_push_checkpoint ;;
     push-checkpoint-epoch)   cmd_push_checkpoint_epoch "${2:-}" ;;
     logs)                    cmd_logs ;;
+    setup-amr)               cmd_setup_amr ;;
+    push-amr-data)           cmd_push_amr_data ;;
+    run-amr)                 cmd_run_amr ;;
+    status-amr)              cmd_status_amr ;;
+    output-amr)              cmd_output_amr ;;
+    push-amr-checkpoint)     cmd_push_amr_checkpoint ;;
     help|*)                  cmd_help ;;
 esac
