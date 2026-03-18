@@ -293,6 +293,14 @@ def run_training(device: str):
                 api_key = key_file.read_text().strip()
                 logger.info("Found WANDB_API_KEY from code dataset")
             if not api_key:
+                try:
+                    from kaggle_secrets import UserSecretsClient
+                    api_key = UserSecretsClient().get_secret("WANDB_API_KEY")
+                    if api_key:
+                        logger.info("Found WANDB_API_KEY from Kaggle Secrets")
+                except Exception:
+                    pass
+            if not api_key:
                 api_key = os.environ.get("WANDB_API_KEY")
             if api_key:
                 wandb.login(key=api_key)
@@ -372,6 +380,11 @@ def main():
     setup_environment()
     install_dependencies()
     device = check_gpu()
+    if torch.cuda.is_available():
+        gpu_name = torch.cuda.get_device_name(0)
+        if "P100" in gpu_name:
+            print(f"WARNING: Got P100 ({gpu_name}), expected T4. Exiting to avoid wasting session.")
+            sys.exit(1)
     run_training(device)
 
 
