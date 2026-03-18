@@ -9,7 +9,7 @@ from torchvision.datasets import ImageFolder
 from typing import Tuple, Optional, Callable, List
 import logging
 
-from .custom_datasets import AMRGraphDataset
+from .custom_datasets import AMRGraphDataset, AMRGraphDatasetGlobal
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +99,10 @@ def get_dataset(
     elif dataset_name == 'amrgraph':
         dataset = AMRGraphDataset(amr_file=data_path, bfs_depth=bfs_depth)
         logger.info(f"Loaded AMRGraphDataset with {len(dataset)} samples from {data_path}")
+        return dataset
+    elif dataset_name == 'amrgraph-global':
+        dataset = AMRGraphDatasetGlobal(amr_file=data_path)
+        logger.info(f"Loaded AMRGraphDatasetGlobal with {len(dataset)} samples from {data_path}")
         return dataset
     else:
         raise ValueError(
