@@ -7,6 +7,7 @@ data_config:
   train_split: 0.85
   val_split: 0.15
   seed: 42
+  bfs_depth: 0
 
 augmentation_config:
   num_global_views: 2

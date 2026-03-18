@@ -23,6 +23,7 @@ class DataConfig:
     train_split: float
     val_split: float
     seed: int
+    bfs_depth: int
 
 
 @dataclass

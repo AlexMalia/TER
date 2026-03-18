@@ -1,12 +1,13 @@
 data_config:
   dataset: amrgraph
   data_path: ./dataset/amrs.json
-  batch_size: 16
+  batch_size: 8
   num_workers: 4
   do_pin_memory: true
   train_split: 0.85
   val_split: 0.15
   seed: 42
+  bfs_depth: 2
 
 augmentation_config:
   num_global_views: 2
@@ -46,7 +47,7 @@ loss_config:
 
 optimizer_config:
   optimizer: adamw
-  lr: 5e-5
+  lr: 5.0e-5
   weight_decay: 0.04
   betas: [0.9, 0.999]
   eps: 1.0e-08
@@ -63,17 +64,17 @@ training_config:
   teacher_momentum_schedule: true
   teacher_momentum_final: 1.0
   gradient_clip: 3.0
-  gradient_accumulation_steps: 8
+  gradient_accumulation_steps: 16
   seed: 42
   device: cuda
 
 checkpoint_config:
-  checkpoint_dir: ./outputs/checkpoints/imagenette/vits16-test-resume
+  checkpoint_dir: ./outputs/checkpoints/arm/graphformers-test-depth2
   save_every_n_epochs: 4
   resume_from: null
 
 logging_config:
-  log_dir: ./outputs/logs/imagenette/vits16-test-resume
+  log_dir: ./outputs/logs/arm/graphformers-test-depth2
   log_every_n_iters: 50
   log_verbosity: debug
   use_wandb: true
@@ -87,4 +88,4 @@ evaluation_config:
   knn_ks: [1, 5, 20]
   knn_temperature: 0.07
   knn_batch_size: 256
-  knn_plot_dir: ./outputs/plots/imagenette/vits16-test-resume
+  knn_plot_dir: ./outputs/plots/arm/graphformers-test-depth2

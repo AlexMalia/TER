@@ -19,7 +19,8 @@ def get_dataset(
     data_path: str,
     transform: Optional[Callable] = None,
     download: bool = True,
-    train: bool = True
+    train: bool = True,
+    bfs_depth: int = 1
 ) -> Dataset:
     """
     Get dataset by name.
@@ -96,7 +97,7 @@ def get_dataset(
             logger.info(f"Loaded ImageNet100 val split with {len(val_dataset)} samples")
             return val_dataset
     elif dataset_name == 'amrgraph':
-        dataset = AMRGraphDataset(amr_file=data_path)
+        dataset = AMRGraphDataset(amr_file=data_path, bfs_depth=bfs_depth)
         logger.info(f"Loaded AMRGraphDataset with {len(dataset)} samples from {data_path}")
         return dataset
     else:
