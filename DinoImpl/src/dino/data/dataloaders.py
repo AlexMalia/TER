@@ -114,7 +114,8 @@ def create_train_dataloaders(
         data_path=data_config.data_path,
         transform=transform,
         download=True,
-        train=True
+        train=True,
+        bfs_depth=data_config.bfs_depth
     )
 
     logger.info(f"Loaded {data_config.dataset} dataset with {len(dataset)} samples")
