@@ -1,6 +1,6 @@
 data_config:
-  dataset: amrgraph
-  data_path: ./dataset/amrs.json
+  dataset: amrgraph-global
+  data_path: ./dataset/amrs-little-prince.json
   batch_size: 8
   num_workers: 4
   do_pin_memory: true

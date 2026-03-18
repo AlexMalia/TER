@@ -34,7 +34,7 @@ class AMRGraphDatasetGlobal(Dataset):
         amr_file: str,
         tokenizer_name: str = "bert-base-uncased",
         neighbor_num: int = 10,
-        token_length: int = 30,
+        token_length: int = 10,
         num_global_views: int = 2,
         num_local_views: int = 4,
         global_neighbor_rate: float = 0.8,
