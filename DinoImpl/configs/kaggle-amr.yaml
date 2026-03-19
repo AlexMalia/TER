@@ -34,6 +34,7 @@ augmentation_config:
 
 model_config:
   backbone: graphformers
+  freeze_bert: true
   is_backbone_pretrained: false
   projection_hidden_dim: 2048
   projection_bottleneck_dim: 256

@@ -14,11 +14,11 @@ class GraphformersBackbone(BackboneBase):
 
     def __init__(self, config, hidden_size: int = 768):
         super().__init__()
-        self.model = GraphFormers(config)  # ← Changé ici
+        self.model = GraphFormers(config)
         self.output_dim = hidden_size
 
     @classmethod
-    def from_pretrained(cls, ckpt_path: str = None) -> GraphformersBackbone:
+    def from_pretrained(cls, ckpt_path: str = None, freeze_bert: bool = False) -> GraphformersBackbone:
         config = TuringNLRv3Config(
             vocab_size=30522,
             hidden_size=768,
@@ -41,7 +41,7 @@ class GraphformersBackbone(BackboneBase):
             bert_state_dict = BertModel.from_pretrained("bert-base-uncased").state_dict()
 
             # Filtrer les clés dont la shape ne correspond pas
-            model_state_dict = instance.model.state_dict()  # ← Plus besoin de .bert
+            model_state_dict = instance.model.state_dict()
             filtered_state_dict = {
                 k: v for k, v in bert_state_dict.items()
                 if k in model_state_dict and v.shape == model_state_dict[k].shape
@@ -52,6 +52,14 @@ class GraphformersBackbone(BackboneBase):
             loaded = set(filtered_state_dict.keys())
             total = set(model_state_dict.keys())
             print(f"Loaded {len(loaded)}/{len(total)} parameter tensors from bert-base-uncased")
+
+            if freeze_bert:
+                for name, param in instance.model.named_parameters():
+                    if name in filtered_state_dict:
+                        param.requires_grad = False
+                frozen = sum(1 for _, p in instance.model.named_parameters() if not p.requires_grad)
+                total_params = sum(1 for _ in instance.model.parameters())
+                print(f"Frozen {frozen}/{total_params} BERT parameter tensors")
 
         return instance
 
@@ -71,11 +79,14 @@ class GraphformersBackbone(BackboneBase):
             neighbor_mask=neighbor_mask,
         )
 
+        
+
         # Extraire l'embedding CLS (position 1 après le station token)
         hidden_states = encoder_outputs[0]  # (B*N, L+1, D)
         cls_embeddings = hidden_states[:, 1, :].view(B, N, D)  # (B, N, D)
+        station_token = hidden_states[:, 0, :].view(B, N, D)  # (B, N, D)
 
         # Retourner l'embedding du nœud principal (index 0)
-        node_embeddings = cls_embeddings[:, 0, :]  # (B, D)
+        node_embeddings = station_token[:, 0, :]  # (B, D)
 
         return node_embeddings

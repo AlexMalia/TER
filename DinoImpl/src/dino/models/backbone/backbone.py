@@ -50,7 +50,7 @@ def get_backbone(name: str, pretrained: bool = False, **kwargs: Any) -> Backbone
         return DinoBackbone(variant=name_lower, pretrained=pretrained)
     
     elif name_lower in ['graphformers']:
-        return GraphformersBackbone.from_pretrained()
+        return GraphformersBackbone.from_pretrained(freeze_bert=kwargs.get('freeze_bert', False))
 
     else:
         raise ValueError(

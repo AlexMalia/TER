@@ -1,6 +1,6 @@
 data_config:
-  dataset: amrgraph
-  data_path: ./dataset/amrs-little-prince.json
+  dataset: amrgraph-global
+  data_path: /kaggle/input/dino-amr-dataset/amrs-little-prince.json
   batch_size: 8
   num_workers: 4
   do_pin_memory: true
@@ -29,7 +29,7 @@ augmentation_config:
   gaussian_blur_sigma_max: 2.0
   solarization_prob: 0.2
   solarization_threshold: 128
-  normalize_mean: [0.485, 0.456, 0.406]  # ImageNet normalization
+  normalize_mean: [0.485, 0.456, 0.406]
   normalize_std: [0.229, 0.224, 0.225]
 
 model_config:
@@ -55,12 +55,12 @@ optimizer_config:
 
 scheduler_config:
   scheduler: cosine_warmup
-  warmup_epochs: 10
+  warmup_epochs: 20
   min_lr: 1.0e-06
   warmup_start_lr: 0.0
 
 training_config:
-  num_epochs: 50
+  num_epochs: 300
   teacher_momentum: 0.996
   teacher_momentum_schedule: true
   teacher_momentum_final: 1.0
@@ -70,23 +70,23 @@ training_config:
   device: cuda
 
 checkpoint_config:
-  checkpoint_dir: ./outputs/checkpoints/arm/graphformers-test-depth2
+  checkpoint_dir: /kaggle/working/checkpoints/amr
   save_every_n_epochs: 4
   resume_from: null
 
 logging_config:
-  log_dir: ./outputs/logs/arm/graphformers-test-depth2
+  log_dir: /kaggle/working/logs/amr
   log_every_n_iters: 50
   log_verbosity: debug
   use_wandb: true
   wandb_project: "dino-graph-tests"
   wandb_entity: null
-  wandb_run_name: "graphformers-test"
+  wandb_run_name: "graphformers-kaggle"
 
 evaluation_config:
-  use_knn_eval: true
+  use_knn_eval: false
   eval_every_n_epochs: 4
   knn_ks: [1, 5, 20]
   knn_temperature: 0.07
   knn_batch_size: 256
-  knn_plot_dir: ./outputs/plots/arm/graphformers-test-depth2
+  knn_plot_dir: /kaggle/working/plots/amr

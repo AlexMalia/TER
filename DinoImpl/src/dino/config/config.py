@@ -71,6 +71,7 @@ class ModelConfig:
     """Model architecture configuration."""
 
     backbone: str
+    freeze_bert: bool
     is_backbone_pretrained: bool
     projection_hidden_dim: int
     projection_bottleneck_dim: int
