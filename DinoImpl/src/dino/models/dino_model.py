@@ -109,7 +109,8 @@ class DinoModel(nn.Module):
 
         backbone = get_backbone(
             model_config.backbone,
-            pretrained=model_config.is_backbone_pretrained
+            pretrained=model_config.is_backbone_pretrained,
+            freeze_bert=model_config.freeze_bert,
         )
         projection_head = DinoProjectionHead.from_config(
             model_config,
