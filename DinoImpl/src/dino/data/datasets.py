@@ -107,7 +107,7 @@ def get_dataset(
     else:
         raise ValueError(
             f"Unknown dataset: {dataset_name}. "
-            f"Supported datasets: imagenette, imagenet100"
+            f"Supported datasets: imagenette, imagenet100, amrgraph, amrgraph-global"
         )
 
 

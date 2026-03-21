@@ -1,5 +1,5 @@
 data_config:
-  dataset: amrgraph
+  dataset: amrgraph-global  
   data_path: ./dataset/amrs-little-prince.json
   batch_size: 8
   num_workers: 4
@@ -48,7 +48,7 @@ loss_config:
 
 optimizer_config:
   optimizer: adamw
-  lr: 5.0e-5
+  lr: 1.0e-4
   weight_decay: 0.04
   betas: [0.9, 0.999]
   eps: 1.0e-08
@@ -76,7 +76,7 @@ checkpoint_config:
 
 logging_config:
   log_dir: ./outputs/logs/arm/graphformers-test-depth2
-  log_every_n_iters: 50
+  log_every_n_iters: 10
   log_verbosity: debug
   use_wandb: true
   wandb_project: "dino-graph-tests"

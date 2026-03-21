@@ -9,22 +9,30 @@ import json
 import logging
 logging.getLogger("penman").setLevel(logging.WARNING)
 
+
 class AMRGraphDatasetGlobal(Dataset):
     """
-    Dataset of AMR nodes. Each sample is a list of N view dicts for one center
-    node, where views[0..num_global_views-1] are high-coverage global views
+    Dataset of AMR graphs for DINO self-supervised learning.
+
+    Each sample is a list of N view dicts for the root node of one AMR graph,
+    where views[0..num_global_views-1] are high-coverage global views
     (teacher + student) and views[num_global_views..] are low-coverage local
     views (student only).
 
     This directly mirrors DINO multi-crop: global = full-res, local = small crop.
 
+    View generation uses a stochastic DFS: at each node, children are shuffled
+    before being pushed onto the stack. This means the DFS prefix (global/local
+    pool) varies at every __getitem__ call, introducing content-level diversity
+    across epochs — analogous to random cropping in image DINO.
+
     Args:
-        amr_file:            Path to file of Penman AMR graphs (one per line or block).
-        tokenizer_name:      HuggingFace tokenizer identifier.
-        neighbor_num:        Max neighbors to include per view (padding applied if fewer).
-        token_length:        Max token length per node text sequence.
-        num_global_views:    Number of high-coverage views (teacher + student).
-        num_local_views:     Number of low-coverage views (student only).
+        amr_file:             Path to JSON file of Penman AMR graphs.
+        tokenizer_name:       HuggingFace tokenizer identifier.
+        neighbor_num:         Max neighbors to include per view (padding applied if fewer).
+        token_length:         Max token length per node text sequence.
+        num_global_views:     Number of high-coverage views (teacher + student).
+        num_local_views:      Number of low-coverage views (student only).
         global_neighbor_rate: Fraction of neighbors to keep for global views.
         local_neighbor_rate:  Fraction of neighbors to keep for local views.
     """
@@ -48,28 +56,47 @@ class AMRGraphDatasetGlobal(Dataset):
         self.global_neighbor_rate = global_neighbor_rate
         self.local_neighbor_rate = local_neighbor_rate
 
-        # Parse all AMR graphs and build (center_node, neighbors_list) records
-        self.records: List[Tuple[str, List[str]]] = []
+        # Parse all AMR graphs and store (root_concept, root_id, triples, node_concept).
+        # Triples and node_concept are kept so that _dfs_neighbors can be called
+        # lazily at each __getitem__, enabling stochastic DFS across epochs.
+        self.records: List[Tuple[str, str, List[Tuple], Dict[str, str]]] = []
         self._parse(amr_file)
 
     def _dfs_neighbors(
-    self,
-    start: str,
-    node_concept: Dict[str, str],
-    triples: List[Tuple],  # pré-shufflé une fois à la construction
+        self,
+        start: str,
+        node_concept: Dict[str, str],
+        triples: List[Tuple],
     ) -> List[str]:
-        """DFS depuis start, retourne les voisins dans l'ordre de découverte."""
+        """
+        Stochastic DFS depuis start.
+
+        Les enfants de chaque nœud sont shufflés avant d'être empilés, de sorte
+        que le préfixe DFS (utilisé comme global/local pool) varie à chaque appel.
+        Cela introduit une diversité de contenu entre époques, analogue au crop
+        aléatoire en vision.
+        """
         visited = {start}
         stack = [start]
         result = []
 
         while stack:
             current_id = stack.pop()
-            for src, role, target in triples:
-                if src == current_id and target in node_concept and target not in visited:
-                    result.append(f"{role} {node_concept[target]}")
-                    visited.add(target)
-                    stack.append(target)
+
+            # Collecter les enfants du nœud courant
+            children = [
+                (role, target)
+                for src, role, target in triples
+                if src == current_id and target in node_concept and target not in visited
+            ]
+
+            # Shuffle pour varier l'ordre d'exploration à chaque époque
+            random.shuffle(children)
+
+            for role, target in children:
+                result.append(f"{role} {node_concept[target]}")
+                visited.add(target)
+                stack.append(target)
 
         return result
 
@@ -93,17 +120,21 @@ class AMRGraphDatasetGlobal(Dataset):
 
         for graph in graphs:
             node_concept = {inst.source: inst.target for inst in graph.instances()}
-            root = graph.top  # nœud root naturel du graphe AMR
+            root = graph.top
 
-            # Triples filtrés une fois par graphe (pas par vue)
+            # Triples filtrés une fois par graphe et stockés pour le DFS lazy
             triples = [(s, r, t) for s, r, t in graph.triples if r != ":instance"]
 
-            # Un seul DFS par graphe depuis le root
-            all_neighbors = self._dfs_neighbors(root, node_concept, triples)
+            # Vérifier que le root a au moins un voisin
+            has_neighbors = any(
+                s == root and t in node_concept
+                for s, _, t in triples
+            )
+            if not has_neighbors:
+                continue
 
-            if all_neighbors:
-                root_concept = node_concept.get(root, root)
-                self.records.append((root_concept, all_neighbors))
+            root_concept = node_concept.get(root, root)
+            self.records.append((root_concept, root, triples, node_concept))
 
     # ------------------------------------------------------------------
     # Tokenization helpers
@@ -166,18 +197,23 @@ class AMRGraphDatasetGlobal(Dataset):
         return len(self.records)
 
     def __getitem__(self, idx: int) -> List[Dict[str, torch.Tensor]]:
-        center_concept, all_neighbors = self.records[idx]
+        center_concept, root, triples, node_concept = self.records[idx]
+
+        # DFS stochastique : résultat différent à chaque époque grâce au shuffle
+        # des enfants dans _dfs_neighbors
+        all_neighbors = self._dfs_neighbors(root, node_concept, triples)
         n = len(all_neighbors)
         views = []
 
-        # Découpage une seule fois
         global_k = max(1, int(n * self.global_neighbor_rate))
         local_k  = max(1, int(n * self.local_neighbor_rate))
 
-        global_pool = all_neighbors[:global_k]  # préfixe DFS = sous-arbre cohérent
-        local_pool  = all_neighbors[:local_k]   # sous-ensemble strict de global_pool
+        # Préfixes DFS : contenu varie entre époques grâce au DFS stochastique.
+        # local_pool ⊂ global_pool est garanti par construction.
+        global_pool = all_neighbors[:global_k]
+        local_pool  = all_neighbors[:local_k]
 
-        # Global views : shuffle pour diversité entre les 2 vues
+        # Global views : shuffle de l'ordre pour diversité entre les 2 vues
         for _ in range(self.num_global_views):
             nbrs = random.sample(global_pool, len(global_pool))
             views.append(self._build_view(center_concept, nbrs))
