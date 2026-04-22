@@ -93,10 +93,16 @@ def get_dataset(
             val_dataset = ImageFolder(root=val_path, transform=transform)
             logger.info(f"Loaded ImageNet100 val split with {len(val_dataset)} samples")
             return val_dataset
+    elif dataset_name == 'fish4knowledge':
+        if not train:
+            raise ValueError("Fish4Knowledge dataset only has a training split. Set train=True.")
+        full_ds = ImageFolder(root=os.path.join(data_path, "train"), transform=transform)
+        logger.info(f"Loaded Fish4Knowledge dataset (train) with {len(full_ds)} samples")
+        return full_ds
     else:
         raise ValueError(
             f"Unknown dataset: {dataset_name}. "
-            f"Supported datasets: imagenette, imagenet100"
+            f"Supported datasets: imagenette, imagenet100, fish4knowledge"
         )
 
 

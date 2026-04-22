@@ -94,8 +94,10 @@ def main():
     # Create dataloaders
     logger.info("Creating dataloaders...")
     train_loader = create_train_dataloaders(config.data_config, config.augmentation_config)
-    train_eval_loader, val_eval_loader, _ = create_eval_dataloaders(config.data_config, False)
-    logger.info(f"Created dataloaders: {len(train_loader)} train batches, {len(train_eval_loader)} train eval batches, {len(val_eval_loader)} val eval batches")
+    train_eval_loader, val_eval_loader, _ = None, None, None
+    if config.evaluation_config.use_knn_eval and config.data.val_split > 0:
+        train_eval_loader, val_eval_loader, _ = create_eval_dataloaders(config.data_config, False)
+        logger.info(f"Created dataloaders: {len(train_loader)} train batches, {len(train_eval_loader)} train eval batches, {len(val_eval_loader)} val eval batches")
 
     # Create models
     logger.info("Creating models...")
